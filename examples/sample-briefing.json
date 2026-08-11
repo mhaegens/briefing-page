@@ -1,0 +1,34 @@
+{
+  "title": "Morning briefing",
+  "source": {
+    "name": "Demo Builder",
+    "mark": "D",
+    "tone": "coral"
+  },
+  "cards": [
+    {
+      "type": "warning",
+      "priority": "critical",
+      "title": "One slide still uses last quarter's figures",
+      "summary": "Slide 18 was not updated because its source spreadsheet is currently locked.",
+      "body": [
+        "The deck refresh completed for 27 of 28 slides. Slide 18 still shows last quarter's capacity figures because the linked workbook could not be opened.",
+        "Nothing was overwritten. The rest of the deck is ready to review."
+      ],
+      "meta": "Finished today at 07:31",
+      "action_label": "Open the workbook, then rerun slide 18 only.",
+      "reference": "Demo deck · Build 184"
+    },
+    {
+      "type": "result",
+      "priority": "low",
+      "title": "Demo environment reset completed",
+      "summary": "The scenario is back at its clean starting state and the health checks all pass.",
+      "body": [
+        "The demo tenant was reset, test orders were restored, and the scheduling service passed all six health checks."
+      ],
+      "meta": "Completed yesterday at 15:18",
+      "reference": "Demo environment · Reset 92"
+    }
+  ]
+}

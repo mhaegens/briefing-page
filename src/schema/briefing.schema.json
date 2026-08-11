@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Briefing",
+  "description": "A structured briefing published by an agent to the Briefing Hub",
+  "type": "object",
+  "required": ["title", "source", "cards"],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "object",
+      "required": ["name", "mark", "tone"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "mark": { "type": "string", "minLength": 1, "maxLength": 2 },
+        "tone": { "type": "string", "enum": ["blue", "lime", "coral", "yellow"] }
+      }
+    },
+    "cards": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type", "priority", "title", "summary", "body", "meta"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "type": "string", "enum": ["action", "information", "warning", "result"] },
+          "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+          "title": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "body": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "meta": { "type": "string" },
+          "action_label": { "type": "string" },
+          "reference": { "type": "string" }
+        }
+      }
+    }
+  }
+}
