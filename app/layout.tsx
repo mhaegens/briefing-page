@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Briefing Hub — one thing at a time",
   description: "A calm, private place to review briefings from your agents.",
   applicationName: "Briefing Hub",
-  robots: { index: false, follow: false, archive: false },
+  robots: { index: false, follow: false, noarchive: true },
 };
 
 export const viewport: Viewport = {
