@@ -1,4 +1,72 @@
-// Placeholder — real implementation added in US-004
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import * as fs from "fs";
+import * as path from "path";
+import * as schema from "./schema";
+
+const DATA_DIR = process.env.DATA_DIR ?? "./data";
+
+function ensureDirs() {
+  for (const dir of ["", "briefings", "inbox", "processed", "failed"]) {
+    fs.mkdirSync(path.join(DATA_DIR, dir), { recursive: true });
+  }
+}
+
+let _db: ReturnType<typeof drizzle> | null = null;
+
 export function getDb() {
-  throw new Error("getDb() not yet initialized");
+  if (_db) return _db;
+
+  ensureDirs();
+
+  const sqlite = new Database(path.join(DATA_DIR, "briefings.db"));
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
+
+  // Create tables if they don't exist
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS briefings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      source_name TEXT NOT NULL,
+      source_mark TEXT NOT NULL,
+      source_tone TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'unread',
+      json_path TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      reviewed_at INTEGER,
+      completed_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      briefing_id INTEGER NOT NULL REFERENCES briefings(id),
+      position INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      priority TEXT NOT NULL,
+      title TEXT,
+      summary TEXT,
+      body TEXT,
+      meta TEXT,
+      action_label TEXT,
+      reference TEXT,
+      status TEXT NOT NULL DEFAULT 'unread',
+      action_choice TEXT,
+      reviewed_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      mark TEXT NOT NULL,
+      tone TEXT NOT NULL,
+      last_briefing_at INTEGER,
+      briefings_this_week INTEGER NOT NULL DEFAULT 0,
+      unread_count INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
+  _db = drizzle(sqlite, { schema });
+  return _db;
 }
