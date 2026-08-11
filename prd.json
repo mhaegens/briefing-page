@@ -1,0 +1,325 @@
+{
+  "project": "Briefing Hub",
+  "branchName": "ralph/briefing-hub-stage-1",
+  "description": "Stage 1 of the Briefing Hub: full ingest-to-purge flow self-hosted on Coolify. Strips the Cloudflare/vinext stack and replaces it with standard Next.js + SQLite. Agents POST structured JSON briefings; user reviews card-by-card and explicitly purges on completion.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Remove Cloudflare stack, switch to standard Next.js",
+      "description": "As a developer, I need the project to run as a standard Node.js Next.js app so it can be containerized and deployed on Coolify.",
+      "acceptanceCriteria": [
+        "package.json scripts changed to: dev='next dev', build='next build', start='next start', test='tsc --noEmit'",
+        "vinext, wrangler, @cloudflare/vite-plugin removed from dependencies",
+        "worker/index.ts deleted",
+        ".openai/hosting.json deleted",
+        "vite.config.ts deleted (vinext-specific)",
+        "build/sites-vite-plugin.ts deleted",
+        "next.config.ts kept but cleared of any vinext/cloudflare options",
+        "drizzle.config.ts updated to use sqlite dialect pointing to ./data/briefings.db",
+        "next dev starts without errors",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Define the JSON briefing schema",
+      "description": "As a developer, I need a documented JSON schema for briefings so agents know exactly what to POST and the server can validate incoming data.",
+      "acceptanceCriteria": [
+        "src/schema/briefing.schema.json exists with JSON Schema Draft-07",
+        "Schema requires at top level: title (string), source (object with name, mark, tone), cards (array, minItems 1)",
+        "Each card requires: type (enum: action|information|warning|result), priority (enum: critical|high|medium|low), title (string), summary (string), body (array of strings), meta (string)",
+        "Each card allows optional: action_label (string), reference (string)",
+        "examples/sample-briefing.json exists with a valid 2-card briefing",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Define the database schema (Drizzle + SQLite)",
+      "description": "As a developer, I need Drizzle table definitions for briefings, cards, and agent sources so the app has a durable data layer.",
+      "acceptanceCriteria": [
+        "db/schema.ts defines briefings table with columns: id (integer pk), slug (text unique not null), title (text), source_name (text), source_mark (text), source_tone (text), status (text: unread|in_progress|reviewed|completed|deleted, default unread), json_path (text), created_at (integer timestamp), reviewed_at (integer nullable), completed_at (integer nullable)",
+        "db/schema.ts defines cards table with columns: id (integer pk), briefing_id (integer FK→briefings.id), position (integer), type (text), priority (text), title (text nullable), summary (text nullable), body (text nullable, JSON array), meta (text), action_label (text nullable), reference (text nullable), status (text: unread|reviewed|actioned, default unread), action_choice (text nullable), reviewed_at (integer nullable)",
+        "db/schema.ts defines agent_sources table with columns: id (integer pk), name (text unique not null), mark (text), tone (text), last_briefing_at (integer nullable), briefings_this_week (integer default 0), unread_count (integer default 0)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Database initialization and connection",
+      "description": "As a developer, I need the SQLite database to auto-initialize on first run so no manual setup is required.",
+      "acceptanceCriteria": [
+        "db/index.ts removed of all cloudflare:workers imports",
+        "db/index.ts exports getDb() using better-sqlite3 + drizzle-orm/better-sqlite3",
+        "better-sqlite3 and @types/better-sqlite3 added to package.json dependencies",
+        "getDb() reads DATA_DIR env var (default: ./data) and opens DATA_DIR/briefings.db",
+        "On first call, all three tables are created via sql`CREATE TABLE IF NOT EXISTS` or drizzle migrate",
+        "DATA_DIR folders (briefings/, inbox/, processed/, failed/) are created if missing",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Health check API endpoint",
+      "description": "As Coolify, I need a health check endpoint so the container readiness can be verified.",
+      "acceptanceCriteria": [
+        "app/api/health/route.ts exports GET handler",
+        "Returns JSON { ok: true, db: 'connected' } with status 200 when getDb() succeeds",
+        "Returns JSON { ok: false, db: 'error' } with status 503 if getDb() throws",
+        "curl http://localhost:3000/api/health returns 200",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "CSPRNG slug generator utility",
+      "description": "As the ingest layer, I need a cryptographically random URL-safe slug so briefings get unguessable identifiers.",
+      "acceptanceCriteria": [
+        "src/lib/slug.ts exports generateSlug(): string",
+        "Uses crypto.randomBytes(9).toString('base64url') or equivalent to produce at least 12 URL-safe characters",
+        "No hyphens, slashes, or plus signs in output (base64url encoding)",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Shared ingest logic",
+      "description": "As the ingest API and inbox watcher, I need a shared function that validates, stores, and indexes a briefing JSON payload.",
+      "acceptanceCriteria": [
+        "src/lib/ingest.ts exports ingestBriefing(payload: unknown): Promise<{ slug: string; cardCount: number }>",
+        "Validates payload against src/schema/briefing.schema.json using ajv; throws with validation errors on failure",
+        "Generates a slug, writes JSON to DATA_DIR/briefings/<slug>.json",
+        "Inserts one row into briefings table and one row per card into cards table",
+        "Upserts agent_sources row: insert on conflict(name) do update last_briefing_at, unread_count+1",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Ingest API endpoint",
+      "description": "As an agent, I want to POST a briefing JSON to the server so it appears in the user's inbox.",
+      "acceptanceCriteria": [
+        "app/api/ingest/route.ts exports POST handler",
+        "Returns 401 if Authorization header is missing or does not match Bearer <BRIEFING_HUB_API_KEY>",
+        "Returns 400 with { ok: false, errors: [...] } if payload fails schema validation",
+        "Calls ingestBriefing() on valid payload",
+        "Returns 200 with { ok: true, slug: string, card_count: number } on success",
+        "Returns 500 with { ok: false, error: 'Internal error' } (no sensitive detail) on unexpected errors",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "File system inbox watcher",
+      "description": "As a developer, I want to drop a JSON file into /data/inbox/ and have it ingested automatically.",
+      "acceptanceCriteria": [
+        "src/lib/inbox-watcher.ts exports startInboxWatcher(): void",
+        "Watches DATA_DIR/inbox/ using fs.watch() for new .json files",
+        "On new file: reads content, calls ingestBriefing(), moves file to DATA_DIR/processed/<filename> on success",
+        "On validation or ingest error: moves file to DATA_DIR/failed/<filename>, logs error to console",
+        "instrumentation.ts (Next.js instrumentation hook) exists and calls startInboxWatcher() in the register() function",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "List briefings API",
+      "description": "As the frontend, I need to fetch the list of active briefings for the inbox and history views.",
+      "acceptanceCriteria": [
+        "app/api/briefings/route.ts exports GET handler",
+        "Returns { briefings: [...] } ordered by created_at DESC",
+        "Each item shape: { slug, title, source: { name, mark, tone }, status, card_count, unread_count, created_at }",
+        "Excludes rows where status='deleted'",
+        "Includes rows where status='completed' (history view needs these)",
+        "Returns { briefings: [] } if no rows exist",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Get single briefing API",
+      "description": "As the frontend, I need to fetch a briefing and all its cards for the briefing session view.",
+      "acceptanceCriteria": [
+        "app/api/briefings/[slug]/route.ts exports GET handler",
+        "Returns 404 JSON if slug not found or status='deleted'",
+        "Returns briefing + ordered cards: { slug, title, source, status, created_at, cards: [{ id, position, type, priority, title, summary, body, meta, action_label, reference, status, action_choice }] }",
+        "If briefing status is 'unread', updates it to 'in_progress' before returning",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Card review and action API",
+      "description": "As the frontend, I need to record the user's decision on each card.",
+      "acceptanceCriteria": [
+        "app/api/cards/[id]/route.ts exports PATCH handler",
+        "Accepts body { status: 'reviewed' } or { status: 'actioned', action_choice: string }",
+        "Returns 400 if status is not 'reviewed' or 'actioned'",
+        "Returns 404 if card id not found",
+        "Updates card status, action_choice (if actioned), and reviewed_at timestamp",
+        "Returns { ok: true }",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Briefing completion API with cascading purge",
+      "description": "As the frontend, I need to mark a briefing as done and purge all content so the security guarantee is real.",
+      "acceptanceCriteria": [
+        "app/api/briefings/[slug]/complete/route.ts exports POST handler",
+        "Returns 404 if slug not found",
+        "Purge sequence: (1) delete DATA_DIR/briefings/<slug>.json (no error if missing), (2) set cards title/summary/body/action_label/reference to null in DB, (3) set briefing status='deleted' and completed_at=now",
+        "All purge steps complete before response is sent",
+        "Returns { ok: true, actions_count: N } where N = count of cards with status='actioned'",
+        "After completion GET /api/briefings/:slug returns 404",
+        "Briefing row remains in DB as tombstone with status='deleted' and no content",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Sources API",
+      "description": "As the frontend, I need to fetch the list of agent sources that have published briefings.",
+      "acceptanceCriteria": [
+        "app/api/sources/route.ts exports GET handler",
+        "Returns { sources: [...] } ordered by last_briefing_at DESC nulls last",
+        "Each item: { id, name, mark, tone, last_briefing_at, briefings_this_week, unread_count }",
+        "Returns { sources: [] } if no sources exist",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Wire inbox view to real data",
+      "description": "As the user, I want the inbox to show my actual briefings instead of hardcoded mock data.",
+      "acceptanceCriteria": [
+        "InboxView component fetches from GET /api/briefings on mount using useEffect + fetch",
+        "Hero callout shows real count of unread/in_progress briefings (the '03' number becomes dynamic)",
+        "Briefing list renders real briefings from API; each row shows source mark, source tone, title, created_at, and unread card count",
+        "Date in greeting is dynamic: new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })",
+        "'Interactive prototype' pill removed from topbar",
+        "Loading skeleton or spinner shown while fetching",
+        "Empty state shown if briefings array is empty: 'Your agents have nothing to report yet.'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Wire briefing session to real data",
+      "description": "As the user, I want the briefing session to show real cards from a selected briefing and record my decisions to the server.",
+      "acceptanceCriteria": [
+        "InboxView passes the selected briefing slug to Home so BriefingView can fetch it",
+        "BriefingView fetches from GET /api/briefings/:slug on mount",
+        "Cards array is driven by API response (not hardcoded)",
+        "Reviewed action calls PATCH /api/cards/:id with { status: 'reviewed' }",
+        "Needs-action choice calls PATCH /api/cards/:id with { status: 'actioned', action_choice: label }",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Wire completion to real purge API",
+      "description": "As the user, I want 'Mark done & delete' to actually purge the briefing on the server.",
+      "acceptanceCriteria": [
+        "'Mark done & delete' button calls POST /api/briefings/:slug/complete",
+        "Deleted/success screen only shown after API responds { ok: true }",
+        "If API returns error, an inline error message is shown and the briefing is not marked deleted in UI",
+        "After successful purge, navigating back to inbox no longer shows the briefing",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Wire history and sources views to real data",
+      "description": "As the user, I want the history and sources views to show real data instead of hardcoded arrays.",
+      "acceptanceCriteria": [
+        "HistoryView fetches from GET /api/briefings on mount",
+        "Filter buttons (All / Active / Completed / Needs action) filter the list client-side",
+        "Completed rows show status pill 'Completed — content deleted' and have no clickable arrow",
+        "Active rows show status pill 'Reviewed — content active' and link to the briefing session",
+        "SourcesView fetches from GET /api/sources on mount",
+        "Each source card renders real name, mark, tone, last_briefing_at, unread_count, briefings_this_week",
+        "Empty state shown in SourcesView if sources array is empty",
+        "Stage 2 preview card ('Agent work queue') remains as a static element",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Docker packaging",
+      "description": "As a Coolify operator, I need a Dockerfile and docker-compose.yml so the app deploys as a container.",
+      "acceptanceCriteria": [
+        "Dockerfile uses multi-stage build: stage 1 (node:22-slim + build-essential) installs deps and runs next build; stage 2 (node:22-slim) copies .next/standalone output",
+        "next.config.ts sets output: 'standalone'",
+        "Final image runs node server.js on port 3000",
+        "BRIEFING_HUB_API_KEY and DATA_DIR accepted as ENV / ARG",
+        "VOLUME /data declared in Dockerfile",
+        "docker-compose.yml defines one service with volume mount ./data:/data and env_file: .env.example",
+        ".env.example exists with BRIEFING_HUB_API_KEY=change_me_40_chars and DATA_DIR=/data",
+        "docker build -t briefing-hub . completes without errors",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

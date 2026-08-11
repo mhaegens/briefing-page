@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="theme-color" content="#1737d0" />
+    <title>Briefing Hub — interactive mockup</title>
+    <link rel="stylesheet" href="./app/globals.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <button class="brand" data-view="inbox" aria-label="Briefing Hub home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand-words">Briefing<br />Hub</span>
+        </button>
+        <nav class="sidebar-nav">
+          <p class="nav-kicker">Your space</p>
+          <button class="nav-item active" data-view="inbox"><span class="nav-icon">▦</span><span>Inbox</span><span class="nav-count">6</span></button>
+          <button class="nav-item" data-view="briefing"><span class="nav-icon">▶</span><span>Briefing</span></button>
+          <button class="nav-item" data-view="history"><span class="nav-icon">↺</span><span>History</span></button>
+          <button class="nav-item" data-view="sources"><span class="nav-icon">◉</span><span>Sources</span></button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="privacy-status"><span class="pulse-dot"></span><div><strong>Private & protected</strong><span>Encrypted connection</span></div></div>
+          <button class="profile-button"><span class="avatar">MH</span><span><strong>Mitchell</strong><small>Personal hub</small></span><span>•••</span></button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <button class="mobile-brand" data-view="inbox"><span class="brand-mark mini"><i></i><i></i><i></i></span><strong>Briefing Hub</strong></button>
+          <div class="search-wrap"><button class="search-button"><span>⌕</span><span class="search-label">Search anything</span><kbd>⌘ K</kbd></button></div>
+          <div class="topbar-actions"><span class="prototype-pill">Interactive prototype</span><button class="icon-button"><span class="notification-dot"></span>♢</button></div>
+        </header>
+        <div class="page-stage" id="stage"></div>
+      </section>
+
+      <nav class="mobile-nav" aria-label="Mobile navigation">
+        <button class="active" data-view="inbox"><span class="nav-icon">▦</span><span>Inbox</span></button>
+        <button data-view="briefing"><span class="nav-icon">▶</span><span>Briefing</span></button>
+        <button data-view="history"><span class="nav-icon">↺</span><span>History</span></button>
+        <button data-view="sources"><span class="nav-icon">◉</span><span>Sources</span></button>
+      </nav>
+    </main>
+
+    <script>
+      const cards = [
+        {source:'Mail Agent', mark:'M', tone:'blue', type:'action', priority:'high', title:'Customer wants PP/DS in the next demo', summary:'They asked whether campaign constraints can be included in Thursday’s scheduling walkthrough.', why:'A reply would unblock Thursday’s demo prep.', body:'The Acme planning team replied to yesterday’s demo recap. They want the next session to include a realistic PP/DS scenario with campaign constraints.'},
+        {source:'Research Agent', mark:'R', tone:'lime', type:'information', priority:'medium', title:'Three useful patterns for the briefing schema', summary:'The strongest examples separate content, user state, and follow-up work—just like your architecture proposes.', body:'The review found three recurring patterns: immutable source content, explicit human dispositions, and a separate action queue.'},
+        {source:'Demo Builder', mark:'D', tone:'coral', type:'warning', priority:'critical', title:'One slide still uses last quarter’s figures', summary:'Slide 18 was not updated because its source spreadsheet is currently locked.', why:'Open the workbook, then rerun slide 18 only.', body:'The deck refresh completed for 27 of 28 slides. Nothing was overwritten and the rest of the deck is ready.'},
+        {source:'Mail Agent', mark:'M', tone:'blue', type:'information', priority:'low', title:'The workshop room is confirmed', summary:'Room Atlas is booked from 13:00 to 16:30, with 20 minutes for setup.', body:'Facilities confirmed Room Atlas for Thursday. The room has the large touch display and guest Wi-Fi.'},
+        {source:'Research Agent', mark:'R', tone:'lime', type:'result', priority:'medium', title:'Competitive scan is ready', summary:'A focused comparison of four planning tools is ready, with the differences that matter for your customer.', body:'The scan covers constraint modelling, scheduling explainability, deployment options, and integration effort.'},
+        {source:'Demo Builder', mark:'D', tone:'coral', type:'result', priority:'low', title:'Demo environment reset completed', summary:'The scenario is back at its clean starting state and the health checks all pass.', body:'The demo tenant was reset, test orders were restored, and all six service checks pass.'}
+      ];
+      let view = 'inbox';
+      let index = 0;
+      let complete = false;
+      let deleted = false;
+      let actions = 0;
+
+      const stage = document.querySelector('#stage');
+      const sourceBadge = card => `<span class="source-badge ${card.tone}"><span class="source-mark">${card.mark}</span><span>${card.source}</span></span>`;
+
+      function setView(next) {
+        view = next;
+        document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === next));
+        render();
+      }
+
+      function render() {
+        if (view === 'inbox') renderInbox();
+        if (view === 'briefing') renderBriefing();
+        if (view === 'history') renderHistory();
+        if (view === 'sources') renderSources();
+      }
+
+      function renderInbox() {
+        stage.innerHTML = `<div class="inbox-page page-view">
+          <div class="page-heading inbox-heading"><div><span class="eyebrow">Tuesday, 11 August</span><h1>Good morning, Mitchell.</h1></div><p>Your agents gathered the signal.<br>You only need to make the calls.</p></div>
+          <section class="hero-callout ${deleted ? 'complete' : ''}">
+            <div class="hero-copy"><span class="hero-number">${deleted ? '✓' : '03'}</span><div><span class="eyebrow dark">Your focus</span><h2>${deleted ? 'Morning briefing cleared.' : 'Three things need you.'}</h2><p>${deleted ? 'The content is gone. Your chosen follow-ups are safely queued.' : 'Everything else can wait. Six cards, about four focused minutes.'}</p></div></div>
+            <button class="primary-action dark" id="start"><span>${deleted ? 'Run the prototype again' : 'Start morning briefing'}</span><span class="button-arrow">→</span></button>
+            <div class="hero-scribble">One thing<br>at a time ↘</div>
+          </section>
+          <div class="inbox-grid">
+            <section class="briefings-panel"><div class="section-heading"><div><span class="eyebrow">Today</span><h3>Incoming briefings</h3></div><button class="text-button">View all →</button></div>
+              <div class="briefing-list">
+                <button class="briefing-row featured open-session"><span class="row-accent coral"></span><span class="source-stack"><span class="source-bubble coral">D</span><span class="source-bubble blue">M</span></span><span class="row-copy"><span class="row-topline"><strong>Needs your attention</strong><time>08:12</time></span><span>Customer reply + one demo warning</span></span><span class="count-bubble">3</span></button>
+                <button class="briefing-row open-session"><span class="row-accent lime"></span><span class="source-bubble lime">R</span><span class="row-copy"><span class="row-topline"><strong>Research Agent</strong><time>07:48</time></span><span>Schema patterns + competitive scan</span></span><span class="count-bubble quiet">2</span></button>
+                <button class="briefing-row open-session"><span class="row-accent blue"></span><span class="source-bubble blue">M</span><span class="row-copy"><span class="row-topline"><strong>Mail Agent</strong><time>Yesterday</time></span><span>Workshop room confirmed</span></span><span class="count-bubble quiet">1</span></button>
+              </div>
+            </section>
+            <aside class="rhythm-panel"><div class="section-heading compact-heading"><div><span class="eyebrow">Your rhythm</span><h3>This week</h3></div><span class="tiny-label">Calm</span></div><div class="rhythm-chart">${[42,70,54,86,30,18,12].map((h,i)=>`<div class="rhythm-day"><span class="bar ${i===1?'active':''}" style="height:${h}%"></span><small>${['M','T','W','T','F','S','S'][i]}</small></div>`).join('')}</div><p class="rhythm-note"><strong>12 briefings cleared</strong><span>Average: 3m 42s</span></p></aside>
+          </div>
+          <section class="quiet-note"><span class="quiet-icon">◎</span><div><strong>No noisy notifications.</strong><span>Your inbox is the source of truth. Critical items are the only exception.</span></div><button>Settings →</button></section>
+        </div>`;
+        stage.querySelector('#start').onclick = () => { if(deleted){index=0;complete=false;deleted=false;actions=0;} setView('briefing'); };
+        stage.querySelectorAll('.open-session').forEach(button => button.onclick = () => setView('briefing'));
+      }
+
+      function renderBriefing() {
+        if (deleted) {
+          stage.innerHTML = `<div class="briefing-page page-view success-page"><div class="success-mark"><span>✓</span></div><span class="eyebrow">Briefing complete</span><h1>Done means gone.</h1><p>The six cards and their attachments have been deleted. The old briefing link no longer opens.</p><div class="retained-state"><span class="retained-count">${Math.max(actions,2)}</span><div><strong>follow-ups kept</strong><span>Only content-free workflow state remains.</span></div></div><button class="primary-action blue-action" id="reset">Run prototype again <span>→</span></button></div>`;
+          stage.querySelector('#reset').onclick = () => { index=0;complete=false;deleted=false;actions=0; renderBriefing(); };
+          return;
+        }
+        if (complete) {
+          stage.innerHTML = `<div class="briefing-page page-view completion-page"><div class="completion-grid"><div class="completion-copy"><span class="eyebrow">All six cards reviewed</span><h1>Your head is clear.<br><em>One last choice.</em></h1><p>Reviewing cards does not delete them. You decide when this briefing is truly finished.</p><button class="text-button review-link" id="again">↺ Review the cards again</button></div><div class="delete-card"><span class="delete-icon">⌫</span><span class="eyebrow dark">Finish securely</span><h2>Mark this briefing as done?</h2><p>The briefing content, attachments, and cached copies will be deleted from the server.</p><ul><li><span>✓</span>Your review status stays</li><li><span>✓</span>Selected follow-ups stay</li><li><span>×</span>Original content cannot be reopened</li></ul><div class="delete-actions"><button class="secondary-action" id="keep">Keep briefing</button><button class="danger-action" id="delete">Mark done & delete <span>→</span></button></div></div></div></div>`;
+          stage.querySelector('#again').onclick = () => { index=0;complete=false;renderBriefing(); };
+          stage.querySelector('#keep').onclick = () => setView('inbox');
+          stage.querySelector('#delete').onclick = () => { deleted=true;renderBriefing(); };
+          return;
+        }
+        const card = cards[index];
+        stage.innerHTML = `<div class="briefing-page page-view">
+          <div class="focus-header"><div><span class="eyebrow">Morning briefing</span><h1>One thing at a time.</h1></div><div class="progress-copy"><strong>${index+1} of ${cards.length}</strong><span>~${cards.length-index} min left</span></div></div>
+          <div class="progress-track"><span style="width:${((index+1)/cards.length)*100}%"></span></div>
+          <div class="focus-layout"><button class="round-button back-button" id="back" ${index===0?'disabled':''}>←</button><div class="card-stage"><div class="stack-card stack-two"></div><div class="stack-card stack-one"></div><div class="focus-card"><div class="card-topline">${sourceBadge(card)}<span class="priority-tag ${card.priority}">${card.priority}</span></div><div class="card-main-copy"><span class="card-type">${card.type==='warning'?'Heads up':card.type}</span><h2>${card.title}</h2><p>${card.summary}</p></div>${card.why?`<div class="action-hint"><span>↳</span><p><strong>Why it matters</strong>${card.why}</p></div>`:''}<button class="read-more" id="detail">Read full note <span>↗</span></button></div></div><span class="round-button ghost-spacer">→</span></div>
+          <div class="decision-area"><p class="gesture-hint">Swipe in the product or use these buttons</p><div class="decision-buttons"><button class="decision-button seen" id="seen"><span class="decision-icon">←</span><span><strong>Reviewed</strong><small>No follow-up</small></span></button><button class="decision-button action" id="action"><span><strong>Needs action</strong><small>Choose what happens</small></span><span class="decision-icon">→</span></button></div></div>
+          <p class="keyboard-hint"><kbd>←</kbd> reviewed <span>·</span> <kbd>→</kbd> needs action <span>·</span> tap card for detail</p>
+        </div>`;
+        stage.querySelector('#back').onclick = () => { if(index>0){index--;renderBriefing();} };
+        stage.querySelector('#seen').onclick = advance;
+        stage.querySelector('#action').onclick = () => (card.type==='action'||card.type==='warning') ? showActions() : (actions++,advance());
+        stage.querySelector('#detail').onclick = showDetail;
+      }
+
+      function advance() { if(index===cards.length-1){complete=true;} else index++; renderBriefing(); }
+
+      function showDetail() {
+        const card=cards[index]; const overlay=document.createElement('div'); overlay.className='overlay';
+        overlay.innerHTML=`<article class="detail-sheet"><div class="sheet-handle"></div><header class="sheet-header">${sourceBadge(card)}<button class="close-button">×</button></header><div class="sheet-content"><div class="sheet-labels"><span class="priority-tag ${card.priority}">${card.priority}</span><span>${card.type}</span></div><h2>${card.title}</h2><p class="sheet-summary">${card.summary}</p><div class="body-copy"><p>${card.body}</p><p>The production view can safely render restricted Markdown, links, attachments, timestamps, and sanitised source excerpts here.</p></div>${card.why?`<blockquote><strong>Suggested next step</strong>${card.why}</blockquote>`:''}<div class="source-reference"><span>Source reference</span><strong>${card.source} · source run</strong><small>Today at 08:12</small></div></div><footer class="sheet-footer"><button class="secondary-action close-detail">Back to card</button><button class="primary-action blue-action detail-action">Needs action <span>→</span></button></footer></article>`;
+        document.body.append(overlay); overlay.querySelectorAll('.close-button,.close-detail').forEach(b=>b.onclick=()=>overlay.remove()); overlay.querySelector('.detail-action').onclick=()=>{overlay.remove();showActions();}; overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
+      }
+
+      function showActions() {
+        const overlay=document.createElement('div'); overlay.className='overlay action-overlay';
+        const choices=[['Draft a response','Let Mail Agent prepare it'],['Add to demo prep','Put it on Thursday’s list'],['Remind me later','Bring it back this afternoon'],['I’ll handle it','Keep no agent follow-up']];
+        overlay.innerHTML=`<section class="action-sheet"><button class="close-button">×</button><span class="eyebrow">Needs action</span><h2>What should happen?</h2><p class="action-context">For “${cards[index].title}”</p><div class="action-choice-list">${choices.map((c,i)=>`<button class="choose"><span class="choice-number">0${i+1}</span><span><strong>${c[0]}</strong><small>${c[1]}</small></span><span class="choice-arrow">→</span></button>`).join('')}</div><p class="content-note"><span>◇</span>Only your choice is retained after this briefing is deleted.</p></section>`;
+        document.body.append(overlay); overlay.querySelector('.close-button').onclick=()=>overlay.remove(); overlay.querySelectorAll('.choose').forEach(b=>b.onclick=()=>{actions++;overlay.remove();advance();}); overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
+      }
+
+      function renderHistory() {
+        const items=[['Morning briefing','3 sources','Reviewed — content active','Today, 09:06','blue'],['Monday wrap-up','Mail Agent','Completed — content deleted','10 Aug, 17:24','lime'],['Demo build 183','Demo Builder','Completed — content deleted','10 Aug, 15:08','coral'],['Planning research','Research Agent','Completed — content deleted','8 Aug, 11:32','lime']];
+        stage.innerHTML=`<div class="history-page page-view content-page"><div class="page-heading"><div><span class="eyebrow">History</span><h1>What’s been handled.</h1></div><p>Active content is searchable. Completed briefings leave only a minimal status record.</p></div><div class="filter-row"><button class="filter active">All</button><button class="filter">Active</button><button class="filter">Completed</button><button class="filter">Needs action</button></div><section class="history-list">${items.map((x,i)=>`<article class="history-row"><span class="history-index ${x[4]}">0${i+1}</span><div class="history-copy"><h3>${x[0]}</h3><span>${x[1]}</span></div><span class="state-pill ${x[2].includes('active')?'active':''}">${x[2]}</span><time>${x[3]}</time><button>→</button></article>`).join('')}</section><div class="privacy-callout"><span class="privacy-symbol">⌫</span><div><span class="eyebrow dark">Privacy by design</span><h2>Completed content does not become an archive.</h2><p>Titles above are illustrative for this mockup. In the real product, deleted rows retain only content-free identifiers, status, and timestamps.</p></div></div></div>`;
+      }
+
+      function renderSources() {
+        const sources=[['Mail Agent','M','blue','08:12 today',3,41,'Ready'],['Demo Builder','D','coral','07:31 today',1,6,'1 warning'],['Research Agent','R','lime','07:48 today',2,9,'Ready']];
+        stage.innerHTML=`<div class="sources-page page-view content-page"><div class="page-heading"><div><span class="eyebrow">Sources</span><h1>Your signal crew.</h1></div><p>See who has briefed you recently. Agent controls arrive later; the source model works now.</p></div><section class="source-grid">${sources.map(s=>`<article class="source-card ${s[2]}"><div class="source-card-top"><span class="source-large-mark ${s[2]}">${s[1]}</span><span class="health ${s[6]==='Ready'?'ready':'warning'}"><i></i>${s[6]}</span></div><h2>${s[0]}</h2><p>Last briefing <strong>${s[3]}</strong></p><div class="source-metrics"><span><strong>${s[4]}</strong><small>Unread</small></span><span><strong>${s[5]}</strong><small>This week</small></span></div><button>View briefings <span>→</span></button></article>`).join('')}<article class="future-card"><span class="future-label">Stage 2 preview</span><h2>Agent work queue</h2><p>Later, this is where pending decisions, live status, and completed results can surface.</p></article></section></div>`;
+      }
+
+      document.querySelectorAll('[data-view]').forEach(button => button.onclick = () => setView(button.dataset.view));
+      document.addEventListener('keydown', event => { if(view!=='briefing'||complete||deleted||document.querySelector('.overlay'))return; if(event.key==='ArrowLeft')advance(); if(event.key==='ArrowRight'){const c=cards[index];(c.type==='action'||c.type==='warning')?showActions():(actions++,advance());} });
+      render();
+    </script>
+  </body>
+</html>
