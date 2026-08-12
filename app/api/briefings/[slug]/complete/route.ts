@@ -14,6 +14,19 @@ export async function POST(
   } catch (res) {
     return res as Response;
   }
+
+  const contentType = req.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return NextResponse.json({ ok: false, error: "Unsupported Media Type" }, { status: 415 });
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    const origin = req.headers.get("origin") ?? "";
+    if (origin !== "https://brief.haegens.be") {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   const { slug } = await params;
   try {
     const db = getDb();
