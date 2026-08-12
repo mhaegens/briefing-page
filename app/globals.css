@@ -2682,3 +2682,27 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Agents view ── */
+.agents-empty { color: var(--muted); font-size: 12px; padding: 20px 0; }
+.job-section { margin-bottom: 32px; }
+.job-section-heading { font-size: 11px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.job-list { display: flex; flex-direction: column; gap: 10px; }
+.agents-job-card { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #f8f6f1; }
+.agents-job-card .job-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.agents-job-card .job-card-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.agents-job-card .job-pipeline-name { font-size: 13px; font-weight: 750; letter-spacing: -0.02em; }
+.agents-job-card .job-title { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agents-job-card .job-card-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.agents-job-card .job-time { font-size: 10px; color: var(--muted); }
+.agents-job-card .job-progress { margin-top: 12px; }
+.agents-job-card .job-progress-track { height: 5px; border-radius: 99px; background: #dedbd2; overflow: hidden; }
+.agents-job-card .job-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--blue); transition: width 0.4s ease; }
+.agents-job-card .job-progress-label { display: block; font-size: 10px; color: var(--muted); margin-top: 4px; }
+.agents-job-card .job-error { font-size: 10px; color: #c0392b; background: #fdf0ed; border-radius: 8px; padding: 8px 10px; margin: 10px 0 0; white-space: pre-wrap; word-break: break-word; }
+.status-pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 9px; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
+.status-pill.running { background: #e8f0fe; color: var(--blue); }
+.status-pill.queued { background: #f0f0ee; color: var(--muted); }
+.status-pill.succeeded { background: #e8f5ed; color: #2e7d4f; }
+.status-pill.failed { background: #fdf0ed; color: #c0392b; }
+.status-pill.cancelled { background: #f0f0ee; color: var(--muted); }
