@@ -1,7 +1,15 @@
 import { run as runPlaud } from "./pipelines/plaud.js";
+import { run as runPrompt } from "./pipelines/prompt.js";
+import { run as runEmail } from "./pipelines/email.js";
+import { run as runDeepen } from "./pipelines/deepen.js";
+import { run as runPdfClone } from "./pipelines/pdf-clone.js";
 
 const PIPELINES = {
   plaud: runPlaud,
+  prompt: runPrompt,
+  email: runEmail,
+  deepen: runDeepen,
+  "pdf-clone": runPdfClone,
 };
 
 export async function runJob(job, config) {
