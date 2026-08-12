@@ -3,11 +3,17 @@ import * as fs from "fs";
 import { getDb } from "@/db";
 import { briefings, cards } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { requireOwner } from "@/src/lib/auth";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
+  try {
+    await requireOwner(req);
+  } catch (res) {
+    return res as Response;
+  }
   const { slug } = await params;
   try {
     const db = getDb();
@@ -33,7 +39,7 @@ export async function POST(
 
     // 2. Null out card content
     db.update(cards)
-      .set({ title: null, summary: null, body: null, action_label: null, reference: null })
+      .set({ title: null, summary: null, body: null, content: null, action_label: null, reference: null })
       .where(eq(cards.briefing_id, briefing.id))
       .run();
 

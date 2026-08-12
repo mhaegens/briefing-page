@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { cards } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { requireOwner } from "@/src/lib/auth";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireOwner(req);
+  } catch (res) {
+    return res as Response;
+  }
   const { id } = await params;
   const cardId = parseInt(id, 10);
   if (isNaN(cardId)) {

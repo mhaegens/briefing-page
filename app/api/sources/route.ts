@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { agent_sources } from "@/db/schema";
-import { asc, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { requireOwner } from "@/src/lib/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  try {
+    await requireOwner(request);
+  } catch (res) {
+    return res as Response;
+  }
   try {
     const db = getDb();
     const rows = db
