@@ -6,6 +6,7 @@ import { run as runPdfClone } from "./pipelines/pdf-clone.js";
 import { run as runSapNote } from "./pipelines/sap-note.js";
 import { run as runRfpResponse } from "./pipelines/rfp-response.js";
 import { run as runReport } from "./pipelines/report.js";
+import { run as runStub } from "./pipelines/stub.js";
 
 const PIPELINES = {
   plaud: runPlaud,
@@ -17,6 +18,11 @@ const PIPELINES = {
   "rfp-response": runRfpResponse,
   report: runReport,
 };
+
+// Stub pipeline available only in test mode
+if (process.env.NODE_ENV === "test") {
+  PIPELINES["stub"] = runStub;
+}
 
 export async function runJob(job, config) {
   const pipeline = PIPELINES[job.job_type];

@@ -5,6 +5,7 @@ import { desc, max } from "drizzle-orm";
 import { requireOwner } from "@/src/lib/auth";
 
 const VALID_JOB_TYPES = ["plaud", "prompt", "email", "deepen", "pdf-clone", "sap-note", "rfp-response", "report"] as const;
+const TEST_ONLY_JOB_TYPES = ["stub"] as const;
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,7 +60,12 @@ export async function POST(request: NextRequest) {
 
   const { job_type, title, input } = body;
 
-  if (!job_type || !(VALID_JOB_TYPES as readonly string[]).includes(job_type)) {
+  const isTestMode = process.env.NODE_ENV === "test";
+  const allowedTypes: readonly string[] = isTestMode
+    ? [...VALID_JOB_TYPES, ...TEST_ONLY_JOB_TYPES]
+    : VALID_JOB_TYPES;
+
+  if (!job_type || !allowedTypes.includes(job_type)) {
     return NextResponse.json(
       { error: `job_type must be one of: ${VALID_JOB_TYPES.join(", ")}` },
       { status: 400 }

@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/auth.test.mjs"
+    "test": "node --test tests/auth.test.mjs tests/e2e-pipeline.test.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0",
