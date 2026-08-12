@@ -2725,3 +2725,8 @@ kbd {
 .bridge-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .bridge-chip.online .bridge-dot { background: #2e7d4f; }
 .bridge-chip.offline .bridge-dot { background: #aaa; }
+
+/* ── Job cancel + toast ── */
+.job-cancel { padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: white; color: var(--muted); font-size: 10px; font-weight: 650; cursor: pointer; }
+.job-cancel:hover { color: #c0392b; border-color: #c0392b; }
+.agents-toast { margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; background: #fff8e7; border: 1px solid #f0d060; color: #7a5c00; font-size: 12px; }

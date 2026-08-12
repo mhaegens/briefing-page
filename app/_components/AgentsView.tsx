@@ -73,7 +73,7 @@ function StatusPill({ status }: { status: string }) {
   return <span className={classes[status] ?? "status-pill queued"}>{status}</span>;
 }
 
-function JobCard({ job }: { job: Job }) {
+function JobCard({ job, onCancel }: { job: Job; onCancel?: (id: number) => void }) {
   return (
     <article className="agents-job-card">
       <div className="job-card-top">
@@ -84,6 +84,11 @@ function JobCard({ job }: { job: Job }) {
         <div className="job-card-meta">
           <StatusPill status={job.status} />
           <time className="job-time">{relativeTime(job.created_at)}</time>
+          {job.status === "queued" && onCancel && (
+            <button className="job-cancel" onClick={() => onCancel(job.id)} aria-label={`Cancel job ${job.title}`}>
+              Cancel
+            </button>
+          )}
         </div>
       </div>
       {job.status === "running" && (
@@ -191,8 +196,10 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
   const [jobs, setJobs] = useState<Job[]>([]);
   const [fetching, setFetching] = useState(true);
   const [lastBridgeSeen, setLastBridgeSeen] = useState<number | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
+  const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function updateJobs(list: Job[]) {
     setJobs(list);
@@ -244,6 +251,28 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
     if (!pollRef.current) schedulePoll();
   }
 
+  async function handleCancel(id: number) {
+    try {
+      const res = await fetch(`/api/jobs/${id}/cancel`, { method: "POST" });
+      if (res.ok) {
+        setJobs((prev) => prev.map((j) => j.id === id ? { ...j, status: "cancelled" } : j));
+        onJobsChange?.(
+          jobs.filter((j) => j.id !== id && (j.status === "queued" || j.status === "running")).length
+        );
+      } else if (res.status === 409) {
+        showToast("Job is already running — it will complete normally");
+      }
+    } catch {
+      // ignore network errors
+    }
+  }
+
+  function showToast(message: string) {
+    setToast(message);
+    if (toastRef.current) clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setToast(null), 4000);
+  }
+
   const active = jobs.filter((j) => j.status === "queued" || j.status === "running");
   const done = jobs.filter((j) => j.status === "succeeded" || j.status === "cancelled");
   const failed = jobs.filter((j) => j.status === "failed");
@@ -263,6 +292,10 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
         {bridgeOnline ? "Bridge online" : "Bridge offline — jobs will wait"}
       </div>
 
+      {toast && (
+        <div className="agents-toast" role="alert">{toast}</div>
+      )}
+
       {!fetching && jobs.length === 0 && (
         <p className="agents-empty">No agent jobs yet. Trigger a pipeline below.</p>
       )}
@@ -275,7 +308,7 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
         <section className="job-section">
           <h2 className="job-section-heading">Active</h2>
           <div className="job-list">
-            {active.map((job) => <JobCard key={job.id} job={job} />)}
+            {active.map((job) => <JobCard key={job.id} job={job} onCancel={handleCancel} />)}
           </div>
         </section>
       )}
