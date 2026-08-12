@@ -27,6 +27,33 @@ const PIPELINE_NAMES: Record<string, string> = {
   report: "Generate report",
 };
 
+type PipelineDef = {
+  job_type: string;
+  label: string;
+  pathPlaceholder?: string;
+  pathRequired?: boolean;
+};
+
+const PIPELINES: PipelineDef[] = [
+  { job_type: "plaud", label: "Sync Plaud recordings" },
+  { job_type: "prompt", label: "Ingest document or URL", pathPlaceholder: "File path or URL" },
+  { job_type: "email", label: "Process inbox emails" },
+  { job_type: "deepen", label: "Deepen knowledge", pathPlaceholder: "Target note path" },
+  { job_type: "pdf-clone", label: "Clone PDF to Markdown", pathPlaceholder: "PDF file path", pathRequired: true },
+  { job_type: "sap-note", label: "Ingest SAP note", pathPlaceholder: "Note file or URL" },
+  { job_type: "rfp-response", label: "Process RFP requirements", pathPlaceholder: "Requirements file path", pathRequired: true },
+  { job_type: "report", label: "Push briefing report" },
+];
+
+function autoTitle(jobType: string): string {
+  const d = new Date();
+  const day = d.getDate();
+  const month = d.toLocaleString("en-GB", { month: "short" });
+  const year = d.getFullYear();
+  const label = PIPELINE_NAMES[jobType] ?? jobType;
+  return `${label} — ${day} ${month} ${year}`;
+}
+
 function relativeTime(epochSeconds: number): string {
   const diffSeconds = Math.floor(Date.now() / 1000) - epochSeconds;
   if (diffSeconds < 60) return `${diffSeconds}s ago`;
@@ -77,59 +104,143 @@ function JobCard({ job }: { job: Job }) {
   );
 }
 
+function TriggerPanel({ onJobCreated }: { onJobCreated: (job: Job) => void }) {
+  const [paths, setPaths] = useState<Record<string, string>>({});
+  const [cooling, setCooling] = useState<Record<string, boolean>>({});
+
+  async function run(def: PipelineDef) {
+    const path = paths[def.job_type]?.trim() ?? "";
+    setCooling((c) => ({ ...c, [def.job_type]: true }));
+    setTimeout(() => setCooling((c) => ({ ...c, [def.job_type]: false })), 2000);
+
+    const body: { job_type: string; title: string; input?: { path: string } } = {
+      job_type: def.job_type,
+      title: autoTitle(def.job_type),
+    };
+    if (path) body.input = { path };
+
+    try {
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const newJob: Job = {
+        id: data.id,
+        job_type: data.job_type,
+        title: data.title,
+        status: data.status,
+        progress_pct: null,
+        progress_label: null,
+        error_message: null,
+        created_at: data.created_at,
+        claimed_at: null,
+        started_at: null,
+        finished_at: null,
+      };
+      onJobCreated(newJob);
+      if (def.pathPlaceholder) {
+        setPaths((p) => ({ ...p, [def.job_type]: "" }));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <section className="trigger-panel">
+      <div className="section-heading">
+        <div><span className="eyebrow">Pipelines</span><h2 className="trigger-heading">Run a pipeline</h2></div>
+      </div>
+      <div className="trigger-list">
+        {PIPELINES.map((def) => {
+          const path = paths[def.job_type] ?? "";
+          const disabled = cooling[def.job_type] || (def.pathRequired && !path.trim());
+          return (
+            <div className="trigger-row" key={def.job_type}>
+              <span className="trigger-label">{def.label}</span>
+              {def.pathPlaceholder && (
+                <input
+                  className="trigger-path"
+                  type="text"
+                  placeholder={def.pathPlaceholder}
+                  value={path}
+                  onChange={(e) => setPaths((p) => ({ ...p, [def.job_type]: e.target.value }))}
+                  aria-label={`${def.label} path`}
+                />
+              )}
+              <button
+                className="trigger-run"
+                disabled={disabled}
+                onClick={() => run(def)}
+                aria-label={`Run ${def.label}`}
+              >
+                {cooling[def.job_type] ? "Queued" : "Run →"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCount: number) => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [fetching, setFetching] = useState(true);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelledRef = useRef(false);
 
-  async function fetchJobs() {
+  function updateJobs(list: Job[]) {
+    setJobs(list);
+    const activeCount = list.filter((j) => j.status === "queued" || j.status === "running").length;
+    onJobsChange?.(activeCount);
+    return activeCount;
+  }
+
+  async function fetchJobs(): Promise<number> {
     try {
       const res = await fetch("/api/jobs");
-      if (!res.ok) return;
+      if (!res.ok) return 0;
       const data = await res.json();
-      const list: Job[] = data.jobs ?? [];
-      setJobs(list);
-      const activeCount = list.filter((j) => j.status === "queued" || j.status === "running").length;
-      onJobsChange?.(activeCount);
-      return activeCount;
+      return updateJobs(data.jobs ?? []);
     } catch {
       return 0;
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function poll() {
-      if (cancelled) return;
-      setFetching(true);
+  function schedulePoll() {
+    if (cancelledRef.current) return;
+    pollRef.current = setTimeout(async () => {
       const activeCount = await fetchJobs();
+      if (activeCount > 0) schedulePoll();
+    }, 5000);
+  }
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    setFetching(true);
+    fetchJobs().then((activeCount) => {
       setFetching(false);
-      if (cancelled) return;
-      if (activeCount && activeCount > 0) {
-        pollRef.current = setTimeout(poll, 5000);
-      }
-    }
-
-    poll();
-
+      if (activeCount > 0) schedulePoll();
+    });
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
       if (pollRef.current) clearTimeout(pollRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-start polling when new running jobs appear
-  useEffect(() => {
-    const hasRunning = jobs.some((j) => j.status === "running" || j.status === "queued");
-    if (!hasRunning) {
-      if (pollRef.current) {
-        clearTimeout(pollRef.current);
-        pollRef.current = null;
-      }
-    }
-  }, [jobs]);
+  function handleJobCreated(newJob: Job) {
+    setJobs((prev) => [newJob, ...prev]);
+    onJobsChange?.(
+      [newJob, ...jobs].filter((j) => j.status === "queued" || j.status === "running").length
+    );
+    // Kick off polling since we have a queued job
+    if (!pollRef.current) schedulePoll();
+  }
 
   const active = jobs.filter((j) => j.status === "queued" || j.status === "running");
   const done = jobs.filter((j) => j.status === "succeeded" || j.status === "cancelled");
@@ -146,7 +257,7 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
         <p className="agents-empty">No agent jobs yet. Trigger a pipeline below.</p>
       )}
 
-      {(fetching && jobs.length === 0) && (
+      {fetching && jobs.length === 0 && (
         <p style={{ color: "var(--muted)", fontSize: "12px" }}>Loading…</p>
       )}
 
@@ -176,6 +287,8 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
           </div>
         </section>
       )}
+
+      <TriggerPanel onJobCreated={handleJobCreated} />
     </div>
   );
 }
