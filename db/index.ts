@@ -67,6 +67,29 @@ export function getDb() {
       briefings_this_week INTEGER NOT NULL DEFAULT 0,
       unread_count INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued',
+      input_json TEXT,
+      result_json TEXT,
+      error_message TEXT,
+      progress_pct INTEGER DEFAULT 0,
+      progress_label TEXT,
+      created_at INTEGER NOT NULL,
+      claimed_at INTEGER,
+      started_at INTEGER,
+      finished_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS pipeline_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL REFERENCES jobs(id),
+      bridge_pid INTEGER,
+      stderr_tail TEXT
+    );
   `);
 
   // Lightweight forward migration for databases created before rich content blocks.

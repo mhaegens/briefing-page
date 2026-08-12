@@ -36,6 +36,7 @@ export const cards = sqliteTable("cards", {
   title: text("title"),
   summary: text("summary"),
   body: text("body"),
+  content: text("content"),
   meta: text("meta"),
   action_label: text("action_label"),
   reference: text("reference"),
@@ -56,4 +57,29 @@ export const agent_sources = sqliteTable("agent_sources", {
   last_briefing_at: integer("last_briefing_at", { mode: "timestamp" }),
   briefings_this_week: integer("briefings_this_week").notNull().default(0),
   unread_count: integer("unread_count").notNull().default(0),
+});
+
+export const jobs = sqliteTable("jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  job_type: text("job_type").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("queued"),
+  input_json: text("input_json"),
+  result_json: text("result_json"),
+  error_message: text("error_message"),
+  progress_pct: integer("progress_pct").default(0),
+  progress_label: text("progress_label"),
+  created_at: integer("created_at").notNull(),
+  claimed_at: integer("claimed_at"),
+  started_at: integer("started_at"),
+  finished_at: integer("finished_at"),
+});
+
+export const pipeline_runs = sqliteTable("pipeline_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  job_id: integer("job_id")
+    .notNull()
+    .references(() => jobs.id),
+  bridge_pid: integer("bridge_pid"),
+  stderr_tail: text("stderr_tail"),
 });
