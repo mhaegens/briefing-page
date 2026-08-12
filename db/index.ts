@@ -7,12 +7,13 @@ import * as schema from "./schema";
 const DATA_DIR = process.env.DATA_DIR ?? "./data";
 
 function ensureDirs() {
-  for (const dir of ["", "briefings", "inbox", "processed", "failed"]) {
+  for (const dir of ["", "briefings", "inbox"]) {
     fs.mkdirSync(path.join(DATA_DIR, dir), { recursive: true });
   }
 }
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _sqlite: InstanceType<typeof Database> | null = null;
 
 export function getDb() {
   if (_db) return _db;
@@ -48,6 +49,7 @@ export function getDb() {
       title TEXT,
       summary TEXT,
       body TEXT,
+      content TEXT,
       meta TEXT,
       action_label TEXT,
       reference TEXT,
@@ -67,6 +69,18 @@ export function getDb() {
     );
   `);
 
+  // Lightweight forward migration for databases created before rich content blocks.
+  const cardColumns = sqlite.pragma("table_info(cards)") as Array<{ name: string }>;
+  if (!cardColumns.some((column) => column.name === "content")) {
+    sqlite.exec("ALTER TABLE cards ADD COLUMN content TEXT");
+  }
+
+  _sqlite = sqlite;
   _db = drizzle(sqlite, { schema });
   return _db;
+}
+
+export function getSqlite(): InstanceType<typeof Database> {
+  if (!_sqlite) getDb();
+  return _sqlite!;
 }
