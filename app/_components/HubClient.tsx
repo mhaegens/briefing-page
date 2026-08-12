@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import AgentsView from "./AgentsView";
 
-type View = "inbox" | "briefing" | "history" | "sources";
+type View = "inbox" | "briefing" | "history" | "sources" | "agents";
 type CardType = "action" | "information" | "warning" | "result";
 type Priority = "critical" | "high" | "medium" | "low";
 type BriefingStatus = "unread" | "in_progress" | "reviewed" | "completed" | "deleted";
@@ -269,6 +270,7 @@ function NavIcon({ name }: { name: string }) {
     Briefing: "▶",
     History: "↺",
     Sources: "◉",
+    Agents: "◈",
   };
   return <span className="nav-icon" aria-hidden="true">{glyphs[name]}</span>;
 }
@@ -359,6 +361,7 @@ export default function HubClient() {
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingList, setBriefingList] = useState<BriefingListItem[]>([]);
   const [briefingsFetching, setBriefingsFetching] = useState(true);
+  const [agentJobCount, setAgentJobCount] = useState(0);
   const dragStart = useRef<number | null>(null);
 
   const currentCard = liveCards[currentIndex];
@@ -374,8 +377,9 @@ export default function HubClient() {
       { label: "Briefing", value: "briefing" as View },
       { label: "History", value: "history" as View },
       { label: "Sources", value: "sources" as View },
+      { label: "Agents", value: "agents" as View, count: agentJobCount },
     ],
-    [remaining],
+    [remaining, agentJobCount],
   );
 
   function resetSession() {
@@ -660,6 +664,7 @@ export default function HubClient() {
 
           {view === "history" && <HistoryView onOpenBriefing={startBriefing} />}
           {view === "sources" && <SourcesView />}
+          {view === "agents" && <AgentsView onJobsChange={setAgentJobCount} />}
         </div>
       </section>
 
