@@ -2717,3 +2717,11 @@ kbd {
 .trigger-path:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
 .trigger-run { padding: 7px 14px; border-radius: 8px; border: none; background: var(--ink); color: white; font-size: 12px; font-weight: 750; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
 .trigger-run:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Bridge status chip ── */
+.bridge-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; font-size: 11px; font-weight: 650; margin-bottom: 24px; }
+.bridge-chip.online { background: #e8f5ed; color: #2e7d4f; }
+.bridge-chip.offline { background: #f0f0ee; color: var(--muted); }
+.bridge-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.bridge-chip.online .bridge-dot { background: #2e7d4f; }
+.bridge-chip.offline .bridge-dot { background: #aaa; }

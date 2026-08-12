@@ -190,6 +190,7 @@ function TriggerPanel({ onJobCreated }: { onJobCreated: (job: Job) => void }) {
 export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCount: number) => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [lastBridgeSeen, setLastBridgeSeen] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
 
@@ -205,6 +206,7 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
       const res = await fetch("/api/jobs");
       if (!res.ok) return 0;
       const data = await res.json();
+      setLastBridgeSeen(data.last_bridge_seen ?? null);
       return updateJobs(data.jobs ?? []);
     } catch {
       return 0;
@@ -246,11 +248,19 @@ export default function AgentsView({ onJobsChange }: { onJobsChange?: (activeCou
   const done = jobs.filter((j) => j.status === "succeeded" || j.status === "cancelled");
   const failed = jobs.filter((j) => j.status === "failed");
 
+  const now = Math.floor(Date.now() / 1000);
+  const bridgeOnline = lastBridgeSeen !== null && now - lastBridgeSeen <= 90;
+
   return (
     <div className="agents-page page-view content-page">
       <div className="page-heading">
         <div><span className="eyebrow">Agents</span><h1>Pipeline jobs.</h1></div>
         <p>Trigger and monitor Mitchell ingest pipelines from here.</p>
+      </div>
+
+      <div className={`bridge-chip ${bridgeOnline ? "online" : "offline"}`} aria-live="polite">
+        <span className="bridge-dot" aria-hidden="true" />
+        {bridgeOnline ? "Bridge online" : "Bridge offline — jobs will wait"}
       </div>
 
       {!fetching && jobs.length === 0 && (
