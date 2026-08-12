@@ -3,6 +3,8 @@ import { run as runPrompt } from "./pipelines/prompt.js";
 import { run as runEmail } from "./pipelines/email.js";
 import { run as runDeepen } from "./pipelines/deepen.js";
 import { run as runPdfClone } from "./pipelines/pdf-clone.js";
+import { run as runSapNote } from "./pipelines/sap-note.js";
+import { run as runRfpResponse } from "./pipelines/rfp-response.js";
 
 const PIPELINES = {
   plaud: runPlaud,
@@ -10,6 +12,8 @@ const PIPELINES = {
   email: runEmail,
   deepen: runDeepen,
   "pdf-clone": runPdfClone,
+  "sap-note": runSapNote,
+  "rfp-response": runRfpResponse,
 };
 
 export async function runJob(job, config) {
