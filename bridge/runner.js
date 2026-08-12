@@ -5,6 +5,7 @@ import { run as runDeepen } from "./pipelines/deepen.js";
 import { run as runPdfClone } from "./pipelines/pdf-clone.js";
 import { run as runSapNote } from "./pipelines/sap-note.js";
 import { run as runRfpResponse } from "./pipelines/rfp-response.js";
+import { run as runReport } from "./pipelines/report.js";
 
 const PIPELINES = {
   plaud: runPlaud,
@@ -14,6 +15,7 @@ const PIPELINES = {
   "pdf-clone": runPdfClone,
   "sap-note": runSapNote,
   "rfp-response": runRfpResponse,
+  report: runReport,
 };
 
 export async function runJob(job, config) {
