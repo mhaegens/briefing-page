@@ -47,6 +47,9 @@ export const cards = sqliteTable("cards", {
     .default("unread"),
   action_choice: text("action_choice"),
   reviewed_at: integer("reviewed_at", { mode: "timestamp" }),
+  action_job_type: text("action_job_type"),
+  action_job_title: text("action_job_title"),
+  action_job_input: text("action_job_input"),
 });
 
 export const agent_sources = sqliteTable("agent_sources", {
