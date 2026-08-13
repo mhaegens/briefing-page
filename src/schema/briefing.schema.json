@@ -136,7 +136,10 @@
           },
           "meta": { "type": "string", "maxLength": 100 },
           "action_label": { "type": "string", "maxLength": 100 },
-          "reference": { "type": "string", "maxLength": 100 }
+          "reference": { "type": "string", "maxLength": 100 },
+          "action_job_type": { "type": "string", "maxLength": 100 },
+          "action_job_title": { "type": "string", "maxLength": 300 },
+          "action_job_input": { "type": "string", "maxLength": 2000 }
         }
       }
     }
