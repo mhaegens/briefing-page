@@ -163,7 +163,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "No Outlook MCP required. Reply drafts go to _EmailOutbox/ for JWD to pick up and create as Outlook drafts."
     },
     {
