@@ -1,0 +1,238 @@
+{
+  "title": "DKG NFR Review — 2026-08-11",
+  "source": {
+    "name": "RFP Builder",
+    "mark": "R",
+    "tone": "coral"
+  },
+  "cards": [
+    {
+      "type": "action",
+      "priority": "critical",
+      "title": "NFR-3.10 response must be rewritten",
+      "summary": "Aiden implies BTP multi-hyperscaler support removes cloud lock-in, but SAP DM in eu20 runs on Azure only. This is a documented Must gap requiring explicit disclosure.",
+      "body": [
+        "The requirement asks for multi-cloud support or a transparent risk description. Aiden says BTP is offered across multiple hyperscalers, which is technically true at the platform level but misleading: SAP DM in the eu20 region runs exclusively on Azure.",
+        "The response needs to state plainly that multi-cloud portability is not available. Mitigating factors are the contractual data export guarantee, SAP BCP commitments, and multi-AZ redundancy within Azure eu20."
+      ],
+      "content": [
+        {
+          "kind": "metric",
+          "value": "3.10",
+          "label": "Must gap",
+          "detail": "The single biggest architectural objection in this review.",
+          "tone": "coral"
+        },
+        {
+          "kind": "comparison",
+          "title": "Claim versus deployment reality",
+          "left": {
+            "label": "Current wording",
+            "value": "BTP is multi-hyperscaler, so cloud lock-in is removed.",
+            "tone": "neutral"
+          },
+          "right": {
+            "label": "What DKG gets",
+            "value": "SAP DM in eu20 runs exclusively on Microsoft Azure.",
+            "tone": "coral"
+          }
+        },
+        {
+          "kind": "bullets",
+          "title": "What the rewrite must say",
+          "items": [
+            { "text": "SAP DM runs on Microsoft Azure in the eu20 region.", "tone": "coral" },
+            { "text": "DKG cannot choose or switch this workload to AWS or GCP.", "tone": "coral" },
+            { "text": "Data export, BCP commitments, and multi-AZ redundancy mitigate—but do not remove—the gap.", "tone": "lime" }
+          ]
+        },
+        {
+          "kind": "bar_chart",
+          "title": "Mitigation coverage",
+          "caption": "Documented, not a portability score",
+          "items": [
+            { "label": "Cloud portability", "value": 0, "max": 1, "display": "Gap", "tone": "coral" },
+            { "label": "Contractual data export", "value": 1, "max": 1, "display": "Documented", "tone": "lime" },
+            { "label": "Regional resilience", "value": 1, "max": 1, "display": "Multi-AZ", "tone": "blue" }
+          ]
+        },
+        {
+          "kind": "callout",
+          "label": "Recommended wording",
+          "title": "Be explicit about Azure-only hosting",
+          "text": "SAP DM is hosted on Microsoft Azure in eu20. Multi-cloud portability is not available for this deployment. Contractual data export and multi-AZ resilience reduce exit and availability risk.",
+          "tone": "yellow"
+        }
+      ],
+      "action_label": "Rewrite NFR-3.10 response",
+      "meta": "RFP Builder — 2026-08-11"
+    },
+    {
+      "type": "warning",
+      "priority": "high",
+      "title": "NFR-4.04 has a factual error on S/4HANA integration",
+      "summary": "No middleware required is wrong. SAP CPI is the mandatory integration layer between SAP DM and S/4HANA, and NFR-4.02 in the same document states exactly that.",
+      "body": [
+        "The standard SAP DM to S/4HANA integration is delivered through pre-built CPI iFlows. There is no direct middleware-free path.",
+        "Correction: CPI configuration is part of the implementation scope. No custom development is needed for the standard flows."
+      ],
+      "content": [
+        { "kind": "metric", "value": "4.04", "label": "Factual error", "detail": "The response contradicts NFR-4.02 in the same document.", "tone": "coral" },
+        {
+          "kind": "comparison",
+          "title": "Fix the contradiction",
+          "left": { "label": "Incorrect", "value": "No middleware is required.", "tone": "coral" },
+          "right": { "label": "Correct", "value": "SAP CPI is the mandatory integration layer.", "tone": "lime" }
+        },
+        {
+          "kind": "bullets",
+          "title": "Standard scope",
+          "items": [
+            { "text": "Pre-built CPI iFlows cover orders, BOMs, routings, confirmations, goods movements, and quality notifications.", "tone": "blue" },
+            { "text": "CPI configuration belongs in the implementation scope.", "tone": "yellow" },
+            { "text": "No custom development is needed for these standard flows.", "tone": "lime" }
+          ]
+        }
+      ],
+      "meta": "RFP Builder — 2026-08-11"
+    },
+    {
+      "type": "action",
+      "priority": "medium",
+      "title": "7 items need a col J remark before submission",
+      "summary": "Seven requirements contain unconfirmed claims or gaps that need a short qualification before the response is submitted.",
+      "body": [
+        "NFR-1.05 and NFR-1.06 need security evidence narrowed or verified. NFR-2.03, NFR-3.01, NFR-3.04, and NFR-3.09 need contractual or roadmap claims qualified.",
+        "NFR-4.06 must be aligned with the fit assessment and disclosed as custom integration scope."
+      ],
+      "content": [
+        { "kind": "metric", "value": "07", "label": "Remarks needed", "detail": "All seven can be resolved in col J without rewriting the full answer.", "tone": "yellow" },
+        {
+          "kind": "bar_chart",
+          "title": "Where the remarks sit",
+          "caption": "7 items grouped by topic",
+          "items": [
+            { "label": "Security evidence", "value": 2, "max": 7, "display": "2 items", "tone": "blue" },
+            { "label": "Data, roadmap, and contract", "value": 4, "max": 7, "display": "4 items", "tone": "yellow" },
+            { "label": "Integration scope", "value": 1, "max": 7, "display": "1 item", "tone": "coral" }
+          ]
+        },
+        {
+          "kind": "bullets",
+          "title": "The seven exceptions",
+          "items": [
+            { "text": "NFR-1.05 — verify ISO 27017 and 27018 in SAP Trust Center.", "tone": "yellow" },
+            { "text": "NFR-1.06 — narrow CIS claim to Level 1 or provide Level 2 evidence.", "tone": "yellow" },
+            { "text": "NFR-2.03 — verify the named AI addendum exists.", "tone": "yellow" },
+            { "text": "NFR-3.01 — remove or qualify uncommitted roadmap specifics.", "tone": "yellow" },
+            { "text": "NFR-3.04 — clarify that SAP schedules SaaS maintenance windows.", "tone": "yellow" },
+            { "text": "NFR-3.09 — confirm escrow with SAP commercial and legal.", "tone": "yellow" },
+            { "text": "NFR-4.06 — disclose Ultimo as custom PPD REST integration.", "tone": "coral" }
+          ]
+        }
+      ],
+      "action_label": "Add col J remarks for 7 items",
+      "meta": "RFP Builder — 2026-08-11"
+    },
+    {
+      "type": "information",
+      "priority": "low",
+      "title": "Security NFR-1.05 through NFR-1.12: Mitchell notes",
+      "summary": "6 of 8 security items verified clean; NFR-1.05 and NFR-1.06 are the only exceptions.",
+      "body": [
+        "NFR-1.05 and NFR-1.06 need verification. Vulnerability monitoring, SSO, RBAC, SCIM, audit logging, and named user handling are supported by the knowledge base.",
+        "The six clean responses can remain as written."
+      ],
+      "content": [
+        { "kind": "metric", "value": "6/8", "label": "Verified clean", "detail": "Only two security claims need another look.", "tone": "lime" },
+        {
+          "kind": "bar_chart",
+          "title": "Security review",
+          "caption": "8 requirements",
+          "items": [
+            { "label": "Verified", "value": 6, "max": 8, "display": "6", "tone": "lime" },
+            { "label": "Needs evidence", "value": 2, "max": 8, "display": "2", "tone": "coral" }
+          ]
+        },
+        {
+          "kind": "bullets",
+          "title": "Only read the exceptions",
+          "items": [
+            { "text": "NFR-1.05 — ISO 27017 and 27018 need Trust Center verification.", "tone": "coral" },
+            { "text": "NFR-1.06 — CIS Level 2 exceeds the requested scope and lacks evidence.", "tone": "coral" }
+          ]
+        },
+        { "kind": "callout", "label": "Everything else", "title": "Six responses can stay", "text": "Vulnerability monitoring, SSO, RBAC, SCIM provisioning, audit logging, and named-user controls are documented and accurate.", "tone": "lime" }
+      ],
+      "meta": "RFP Builder — 2026-08-11"
+    },
+    {
+      "type": "information",
+      "priority": "low",
+      "title": "Portability and reliability NFR-2.01 through NFR-3.10",
+      "summary": "Ten of fifteen responses are clean. Five require qualification or rewriting before submission.",
+      "body": [
+        "Four of five data requirements are clean; NFR-2.03 needs contract-document verification. Six of ten reliability and architecture requirements are clean.",
+        "NFR-3.01, NFR-3.04, and NFR-3.09 need qualifications. NFR-3.10 is the Must gap covered in the critical card."
+      ],
+      "content": [
+        { "kind": "metric", "value": "10/15", "label": "Clean responses", "detail": "Five exceptions are already isolated for action.", "tone": "blue" },
+        {
+          "kind": "bar_chart",
+          "title": "Review coverage",
+          "caption": "Clean responses by section",
+          "items": [
+            { "label": "Data portability · NFR-2", "value": 4, "max": 5, "display": "4 of 5", "tone": "lime" },
+            { "label": "Reliability & architecture · NFR-3", "value": 6, "max": 10, "display": "6 of 10", "tone": "blue" }
+          ]
+        },
+        {
+          "kind": "bullets",
+          "title": "Exceptions only",
+          "items": [
+            { "text": "NFR-2.03 — verify the AI addendum reference.", "tone": "yellow" },
+            { "text": "NFR-3.01 — qualify specific roadmap items.", "tone": "yellow" },
+            { "text": "NFR-3.04 — correct maintenance-window flexibility.", "tone": "yellow" },
+            { "text": "NFR-3.09 — confirm escrow availability.", "tone": "yellow" },
+            { "text": "NFR-3.10 — rewrite the Azure-only cloud independence claim.", "tone": "coral" }
+          ]
+        }
+      ],
+      "meta": "RFP Builder — 2026-08-11"
+    },
+    {
+      "type": "information",
+      "priority": "low",
+      "title": "Interoperability NFR-4.01 through NFR-4.10",
+      "summary": "7 of 10 items are clean; one response is factually wrong and two need a scope qualification.",
+      "body": [
+        "NFR-4.04 incorrectly calls the S/4HANA integration middleware-free. NFR-4.05 should acknowledge the Partial fit for Qlik and Databricks.",
+        "NFR-4.06 understates the custom integration scope for Ultimo. The other seven responses are supported by the knowledge base."
+      ],
+      "content": [
+        { "kind": "metric", "value": "7/10", "label": "Verified clean", "detail": "The review effort is concentrated in three responses.", "tone": "lime" },
+        {
+          "kind": "bar_chart",
+          "title": "Interoperability verdict",
+          "caption": "10 requirements",
+          "items": [
+            { "label": "Clean", "value": 7, "max": 10, "display": "7", "tone": "lime" },
+            { "label": "Needs qualification", "value": 2, "max": 10, "display": "2", "tone": "yellow" },
+            { "label": "Factual error", "value": 1, "max": 10, "display": "1", "tone": "coral" }
+          ]
+        },
+        {
+          "kind": "bullets",
+          "title": "Only read the exceptions",
+          "items": [
+            { "text": "NFR-4.04 — SAP CPI is mandatory for the standard S/4HANA integration.", "tone": "coral" },
+            { "text": "NFR-4.05 — Qlik has no certified SAP DM connector; the fit is Partial.", "tone": "yellow" },
+            { "text": "NFR-4.06 — Ultimo is custom PPD REST integration scope.", "tone": "yellow" }
+          ]
+        },
+        { "kind": "callout", "label": "Seven clean answers", "title": "Keep the rest as written", "text": "APIs, CPI architecture, the API catalog, 3TEC discovery, delta exchange, metadata, and ISA-95 alignment are supported.", "tone": "blue" }
+      ],
+      "meta": "RFP Builder — 2026-08-11"
+    }
+  ]
+}
