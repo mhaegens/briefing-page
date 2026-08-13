@@ -14,13 +14,26 @@ const VAULT_ROOT = process.env.VAULT_ROOT;
 const CLAUDE_PATH = process.env.CLAUDE_PATH
   ? expandHome(process.env.CLAUDE_PATH)
   : expandHome("~/.local/bin/claude");
+const CF_CLIENT_ID = process.env.CF_CLIENT_ID;
+const CF_CLIENT_SECRET = process.env.CF_CLIENT_SECRET;
 
 const config = {
   HUB_URL,
   BRIDGE_SECRET,
   VAULT_ROOT,
   CLAUDE_PATH,
+  CF_CLIENT_ID,
+  CF_CLIENT_SECRET,
 };
+
+export function bridgeHeaders(cfg, extra = {}) {
+  return {
+    Authorization: `Bearer ${cfg.BRIDGE_SECRET}`,
+    ...(cfg.CF_CLIENT_ID && { "CF-Access-Client-Id": cfg.CF_CLIENT_ID }),
+    ...(cfg.CF_CLIENT_SECRET && { "CF-Access-Client-Secret": cfg.CF_CLIENT_SECRET }),
+    ...extra,
+  };
+}
 
 export function validateConfig(cfg) {
   const errors = [];

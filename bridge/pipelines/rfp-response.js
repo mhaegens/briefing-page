@@ -1,11 +1,12 @@
 import { runPipeline } from "./_base.js";
+import { bridgeHeaders } from "../config.js";
 
 export async function run(job, config) {
   const input = job.input_json ? JSON.parse(job.input_json) : {};
   if (!input.path) {
     await fetch(`${config.HUB_URL}/api/bridge/jobs/${job.id}/fail`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${config.BRIDGE_SECRET}`, "Content-Type": "application/json" },
+      headers: bridgeHeaders(config, { "Content-Type": "application/json" }),
       body: JSON.stringify({ error_message: "rfp-response requires input.path" }),
     });
     return;

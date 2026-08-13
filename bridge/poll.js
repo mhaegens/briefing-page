@@ -1,3 +1,5 @@
+import { bridgeHeaders } from "./config.js";
+
 let stopping = false;
 let currentJobPromise = null;
 
@@ -8,7 +10,7 @@ async function sleep(ms) {
 async function pollOnce(config) {
   const url = `${config.HUB_URL}/api/bridge/jobs/next?wait_seconds=20`;
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${config.BRIDGE_SECRET}` },
+    headers: bridgeHeaders(config),
   });
 
   if (res.status === 200) {
@@ -26,7 +28,7 @@ async function pollOnce(config) {
 async function claimJob(config, jobId) {
   const res = await fetch(`${config.HUB_URL}/api/bridge/jobs/${jobId}/claim`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${config.BRIDGE_SECRET}` },
+    headers: bridgeHeaders(config),
   });
 
   if (res.status === 200) {

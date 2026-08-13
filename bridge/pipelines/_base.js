@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { bridgeHeaders } from "../config.js";
 
 export async function runPipeline(job, config, { promptFile, extraPrefix = "" }) {
   const promptPath = join(config.VAULT_ROOT, promptFile);
@@ -49,7 +50,7 @@ export async function runPipeline(job, config, { promptFile, extraPrefix = "" })
 async function postProgress(config, jobId, pct, label) {
   return fetch(`${config.HUB_URL}/api/bridge/jobs/${jobId}/progress`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${config.BRIDGE_SECRET}`, "Content-Type": "application/json" },
+    headers: bridgeHeaders(config, { "Content-Type": "application/json" }),
     body: JSON.stringify({ pct, label }),
   });
 }
@@ -57,7 +58,7 @@ async function postProgress(config, jobId, pct, label) {
 async function postComplete(config, jobId, resultJson) {
   return fetch(`${config.HUB_URL}/api/bridge/jobs/${jobId}/complete`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${config.BRIDGE_SECRET}`, "Content-Type": "application/json" },
+    headers: bridgeHeaders(config, { "Content-Type": "application/json" }),
     body: JSON.stringify({ result_json: resultJson ?? undefined }),
   });
 }
@@ -65,7 +66,7 @@ async function postComplete(config, jobId, resultJson) {
 async function postFail(config, jobId, errorMessage) {
   return fetch(`${config.HUB_URL}/api/bridge/jobs/${jobId}/fail`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${config.BRIDGE_SECRET}`, "Content-Type": "application/json" },
+    headers: bridgeHeaders(config, { "Content-Type": "application/json" }),
     body: JSON.stringify({ error_message: errorMessage }),
   });
 }
