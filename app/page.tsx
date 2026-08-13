@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { requireOwner } from "@/src/lib/auth";
 import HubClient from "@/app/_components/HubClient";
 
@@ -9,6 +10,10 @@ export default async function Home() {
   const request = new Request("http://localhost/", {
     headers: headersList,
   });
-  await requireOwner(request);
+  try {
+    await requireOwner(request);
+  } catch {
+    redirect(`https://haegens-zero-trust.cloudflareaccess.com`);
+  }
   return <HubClient />;
 }
