@@ -10,25 +10,27 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/auth.test.mjs tests/e2e-pipeline.test.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0",
     "better-sqlite3": "11.10.0",
     "drizzle-orm": "0.45.2",
-    "next": "15.3.4",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "jose": "^6.2.8",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "22.19.19",
-    "@types/react": "19.0.0",
-    "@types/react-dom": "19.0.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "15.3.4",
+    "eslint-config-next": "16.3.0",
     "typescript": "5.9.3"
   },
   "type": "module"

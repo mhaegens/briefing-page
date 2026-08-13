@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { briefings, cards } from "@/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { requireOwner } from "@/src/lib/auth";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
+  try {
+    await requireOwner(req);
+  } catch (res) {
+    return res as Response;
+  }
   const { slug } = await params;
   try {
     const db = getDb();
@@ -45,6 +51,7 @@ export async function GET(
       title: c.title,
       summary: c.summary,
       body: c.body ? (JSON.parse(c.body) as string[]) : [],
+      content: c.content ? JSON.parse(c.content) : [],
       meta: c.meta,
       action_label: c.action_label,
       reference: c.reference,

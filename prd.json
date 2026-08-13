@@ -1,22 +1,19 @@
 {
   "project": "Briefing Hub",
-  "branchName": "ralph/briefing-hub-stage-1",
-  "description": "Stage 1 of the Briefing Hub: full ingest-to-purge flow self-hosted on Coolify. Strips the Cloudflare/vinext stack and replaces it with standard Next.js + SQLite. Agents POST structured JSON briefings; user reviews card-by-card and explicitly purges on completion.",
+  "branchName": "ralph/briefing-hub-stage-2",
+  "description": "Stage 2: Security hardening (CF Access JWT auth, headers, CSRF, purge hygiene), Mac Bridge (Node.js polling script that executes Mitchell ingest pipelines via Claude Code CLI), and Agent Portal UI (Agents tab to trigger and monitor pipeline jobs).",
   "userStories": [
     {
-      "id": "US-001",
-      "title": "Remove Cloudflare stack, switch to standard Next.js",
-      "description": "As a developer, I need the project to run as a standard Node.js Next.js app so it can be containerized and deployed on Coolify.",
+      "id": "US-101",
+      "title": "Upgrade Next.js and React to patched versions",
+      "description": "As a developer, I need the production dependencies patched so no critical or high CVEs remain in the production bundle.",
       "acceptanceCriteria": [
-        "package.json scripts changed to: dev='next dev', build='next build', start='next start', test='tsc --noEmit'",
-        "vinext, wrangler, @cloudflare/vite-plugin removed from dependencies",
-        "worker/index.ts deleted",
-        ".openai/hosting.json deleted",
-        "vite.config.ts deleted (vinext-specific)",
-        "build/sites-vite-plugin.ts deleted",
-        "next.config.ts kept but cleared of any vinext/cloudflare options",
-        "drizzle.config.ts updated to use sqlite dialect pointing to ./data/briefings.db",
-        "next dev starts without errors",
+        "next upgraded to >=15.5.23 in package.json",
+        "react and react-dom upgraded to >=19.0.8 in package.json",
+        "eslint-config-next upgraded to match the new Next.js major version",
+        "npm install run to regenerate package-lock.json",
+        "npm audit --omit=dev reports zero high or critical production advisories",
+        "npm run build completes without errors",
         "Typecheck passes"
       ],
       "priority": 1,
@@ -24,15 +21,19 @@
       "notes": ""
     },
     {
-      "id": "US-002",
-      "title": "Define the JSON briefing schema",
-      "description": "As a developer, I need a documented JSON schema for briefings so agents know exactly what to POST and the server can validate incoming data.",
+      "id": "US-102",
+      "title": "Owner authorization middleware",
+      "description": "As a developer, I need a server-side auth helper that validates the Cloudflare Access JWT so every protected route has a second security layer beyond the edge.",
       "acceptanceCriteria": [
-        "src/schema/briefing.schema.json exists with JSON Schema Draft-07",
-        "Schema requires at top level: title (string), source (object with name, mark, tone), cards (array, minItems 1)",
-        "Each card requires: type (enum: action|information|warning|result), priority (enum: critical|high|medium|low), title (string), summary (string), body (array of strings), meta (string)",
-        "Each card allows optional: action_label (string), reference (string)",
-        "examples/sample-briefing.json exists with a valid 2-card briefing",
+        "src/lib/auth.ts exported function requireOwner(request: Request): Promise<void>",
+        "Reads JWT from Cf-Access-Jwt-Assertion header",
+        "Fetches Cloudflare JWKS from https://<CLOUDFLARE_ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs and validates JWT signature using the jose library",
+        "Verifies aud claim equals CLOUDFLARE_ACCESS_AUDIENCE env var",
+        "Verifies email claim equals BRIEFING_HUB_OWNER_EMAIL env var",
+        "Throws a Response with status 401 and body {\"error\":\"Unauthorized\"} on any validation failure",
+        "Fails closed (throws 401) if any of the three required env vars is absent, UNLESS NODE_ENV !== 'production' AND DEV_SKIP_AUTH=true",
+        ".env.example updated with BRIEFING_HUB_OWNER_EMAIL=, CLOUDFLARE_ACCESS_TEAM_DOMAIN=, CLOUDFLARE_ACCESS_AUDIENCE=, DEV_SKIP_AUTH=false",
+        "jose added to package.json dependencies",
         "Typecheck passes"
       ],
       "priority": 2,
@@ -40,13 +41,17 @@
       "notes": ""
     },
     {
-      "id": "US-003",
-      "title": "Define the database schema (Drizzle + SQLite)",
-      "description": "As a developer, I need Drizzle table definitions for briefings, cards, and agent sources so the app has a durable data layer.",
+      "id": "US-103",
+      "title": "Protect every private API route",
+      "description": "As the owner, I need every confidential route to enforce server-side authorization so an edge misconfiguration cannot expose briefing data.",
       "acceptanceCriteria": [
-        "db/schema.ts defines briefings table with columns: id (integer pk), slug (text unique not null), title (text), source_name (text), source_mark (text), source_tone (text), status (text: unread|in_progress|reviewed|completed|deleted, default unread), json_path (text), created_at (integer timestamp), reviewed_at (integer nullable), completed_at (integer nullable)",
-        "db/schema.ts defines cards table with columns: id (integer pk), briefing_id (integer FK→briefings.id), position (integer), type (text), priority (text), title (text nullable), summary (text nullable), body (text nullable, JSON array), meta (text), action_label (text nullable), reference (text nullable), status (text: unread|reviewed|actioned, default unread), action_choice (text nullable), reviewed_at (integer nullable)",
-        "db/schema.ts defines agent_sources table with columns: id (integer pk), name (text unique not null), mark (text), tone (text), last_briefing_at (integer nullable), briefings_this_week (integer default 0), unread_count (integer default 0)",
+        "requireOwner(request) called at the top of GET /api/briefings handler",
+        "requireOwner(request) called at the top of GET /api/briefings/[slug] handler",
+        "requireOwner(request) called at the top of GET /api/sources handler",
+        "requireOwner(request) called at the top of PATCH /api/cards/[id] handler",
+        "requireOwner(request) called at the top of POST /api/briefings/[slug]/complete handler",
+        "Each protected route returns 401 with generic body {\"error\":\"Unauthorized\"} when auth fails",
+        "POST /api/ingest is NOT changed by this story — it keeps its existing bearer token check",
         "Typecheck passes"
       ],
       "priority": 3,
@@ -54,31 +59,37 @@
       "notes": ""
     },
     {
-      "id": "US-004",
-      "title": "Database initialization and connection",
-      "description": "As a developer, I need the SQLite database to auto-initialize on first run so no manual setup is required.",
+      "id": "US-104",
+      "title": "Server-rendered owner page",
+      "description": "As the owner, I need the main page to authorize server-side before returning any HTML so an origin-bypass attacker cannot load the UI shell.",
       "acceptanceCriteria": [
-        "db/index.ts removed of all cloudflare:workers imports",
-        "db/index.ts exports getDb() using better-sqlite3 + drizzle-orm/better-sqlite3",
-        "better-sqlite3 and @types/better-sqlite3 added to package.json dependencies",
-        "getDb() reads DATA_DIR env var (default: ./data) and opens DATA_DIR/briefings.db",
-        "On first call, all three tables are created via sql`CREATE TABLE IF NOT EXISTS` or drizzle migrate",
-        "DATA_DIR folders (briefings/, inbox/, processed/, failed/) are created if missing",
-        "Typecheck passes"
+        "app/_components/HubClient.tsx created with 'use client' directive containing the existing client-side UI from app/page.tsx",
+        "app/page.tsx converted to an async server component that calls requireOwner(request) then renders <HubClient />",
+        "export const dynamic = 'force-dynamic' set in app/page.tsx",
+        "Unauthenticated request to / returns 401, not the UI HTML (when DEV_SKIP_AUTH is not set)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-005",
-      "title": "Health check API endpoint",
-      "description": "As Coolify, I need a health check endpoint so the container readiness can be verified.",
+      "id": "US-105",
+      "title": "Security response headers",
+      "description": "As a security-conscious operator, I need confidentiality and anti-framing headers applied to every response so briefing content cannot be cached, indexed, or framed.",
       "acceptanceCriteria": [
-        "app/api/health/route.ts exports GET handler",
-        "Returns JSON { ok: true, db: 'connected' } with status 200 when getDb() succeeds",
-        "Returns JSON { ok: false, db: 'error' } with status 503 if getDb() throws",
-        "curl http://localhost:3000/api/health returns 200",
+        "next.config.ts headers block applies to all paths (source: '/(.*)'): Cache-Control: private, no-store, max-age=0",
+        "Header X-Robots-Tag: noindex, nofollow, noarchive, nosnippet applied",
+        "Header Strict-Transport-Security: max-age=31536000; includeSubDomains applied",
+        "Header X-Content-Type-Options: nosniff applied",
+        "Header X-Frame-Options: DENY applied",
+        "Header Referrer-Policy: no-referrer applied",
+        "Header Cross-Origin-Opener-Policy: same-origin applied",
+        "Header Cross-Origin-Resource-Policy: same-origin applied",
+        "Header Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' applied",
+        "poweredByHeader: false set in next.config.ts",
+        "public/robots.txt created with content: User-agent: *\\nDisallow: /",
         "Typecheck passes"
       ],
       "priority": 5,
@@ -86,13 +97,16 @@
       "notes": ""
     },
     {
-      "id": "US-006",
-      "title": "CSPRNG slug generator utility",
-      "description": "As the ingest layer, I need a cryptographically random URL-safe slug so briefings get unguessable identifiers.",
+      "id": "US-106",
+      "title": "Input limits and CSRF",
+      "description": "As a security-conscious operator, I need payload size limits, origin validation, and timing-safe token comparison so agents cannot overwhelm the server and cross-origin mutations are rejected.",
       "acceptanceCriteria": [
-        "src/lib/slug.ts exports generateSlug(): string",
-        "Uses crypto.randomBytes(9).toString('base64url') or equivalent to produce at least 12 URL-safe characters",
-        "No hyphens, slashes, or plus signs in output (base64url encoding)",
+        "POST /api/ingest: returns 413 if Content-Length header is absent or > 524288",
+        "POST /api/ingest: bearer token comparison uses crypto.timingSafeEqual (constant-time)",
+        "PATCH /api/cards/[id] and POST /api/briefings/[slug]/complete: return 415 if Content-Type is not application/json",
+        "PATCH /api/cards/[id] and POST /api/briefings/[slug]/complete: return 403 if Origin header is absent or does not equal https://brief.haegens.be (skip when NODE_ENV !== 'production')",
+        "src/schema/briefing.schema.json: maxLength: 300 on title, maxLength: 500 on summary, maxLength: 2000 on each body array item, maxLength: 100 on meta/action_label/reference",
+        "src/schema/briefing.schema.json: maxItems: 100 on cards array and body array",
         "Typecheck passes"
       ],
       "priority": 6,
@@ -100,15 +114,14 @@
       "notes": ""
     },
     {
-      "id": "US-007",
-      "title": "Shared ingest logic",
-      "description": "As the ingest API and inbox watcher, I need a shared function that validates, stores, and indexes a briefing JSON payload.",
+      "id": "US-107",
+      "title": "Purge and storage hygiene",
+      "description": "As a privacy-conscious owner, I need the purge operation to cover all content fields, remove processed inbox files, and use secure SQLite deletion.",
       "acceptanceCriteria": [
-        "src/lib/ingest.ts exports ingestBriefing(payload: unknown): Promise<{ slug: string; cardCount: number }>",
-        "Validates payload against src/schema/briefing.schema.json using ajv; throws with validation errors on failure",
-        "Generates a slug, writes JSON to DATA_DIR/briefings/<slug>.json",
-        "Inserts one row into briefings table and one row per card into cards table",
-        "Upserts agent_sources row: insert on conflict(name) do update last_briefing_at, unread_count+1",
+        "Completion handler executes PRAGMA secure_delete = ON before the purge transaction",
+        "Purge nulls out title, source_name, source_mark, source_tone, json_path columns (tombstone retains only id, slug, status, created_at, completed_at)",
+        "Inbox watcher: after successful ingest, deletes the source file from /data/inbox/ (does not move to /data/processed/)",
+        "Inbox watcher: on failed ingest, logs the error and deletes the source file (does not retain in /data/failed/)",
         "Typecheck passes"
       ],
       "priority": 7,
@@ -116,16 +129,13 @@
       "notes": ""
     },
     {
-      "id": "US-008",
-      "title": "Ingest API endpoint",
-      "description": "As an agent, I want to POST a briefing JSON to the server so it appears in the user's inbox.",
+      "id": "US-201",
+      "title": "Jobs and pipeline_runs DB tables",
+      "description": "As a developer, I need database tables to store pipeline job requests and Bridge execution records so job state persists across restarts.",
       "acceptanceCriteria": [
-        "app/api/ingest/route.ts exports POST handler",
-        "Returns 401 if Authorization header is missing or does not match Bearer <BRIEFING_HUB_API_KEY>",
-        "Returns 400 with { ok: false, errors: [...] } if payload fails schema validation",
-        "Calls ingestBriefing() on valid payload",
-        "Returns 200 with { ok: true, slug: string, card_count: number } on success",
-        "Returns 500 with { ok: false, error: 'Internal error' } (no sensitive detail) on unexpected errors",
+        "db/schema.ts adds jobs table: id (integer pk autoincrement), job_type (text not null), title (text not null), status (text not null default 'queued'), input_json (text), result_json (text), error_message (text), progress_pct (integer default 0), progress_label (text), created_at (integer not null), claimed_at (integer), started_at (integer), finished_at (integer)",
+        "db/schema.ts adds pipeline_runs table: id (integer pk autoincrement), job_id (integer not null references jobs.id), bridge_pid (integer), stderr_tail (text)",
+        "db/index.ts getDb() creates both tables on first run via CREATE TABLE IF NOT EXISTS",
         "Typecheck passes"
       ],
       "priority": 8,
@@ -133,15 +143,19 @@
       "notes": ""
     },
     {
-      "id": "US-009",
-      "title": "File system inbox watcher",
-      "description": "As a developer, I want to drop a JSON file into /data/inbox/ and have it ingested automatically.",
+      "id": "US-202",
+      "title": "Hub Bridge API — poll and claim endpoints",
+      "description": "As the Mac Bridge, I need to poll for the next queued job and atomically claim it so no two Bridge instances can run the same job.",
       "acceptanceCriteria": [
-        "src/lib/inbox-watcher.ts exports startInboxWatcher(): void",
-        "Watches DATA_DIR/inbox/ using fs.watch() for new .json files",
-        "On new file: reads content, calls ingestBriefing(), moves file to DATA_DIR/processed/<filename> on success",
-        "On validation or ingest error: moves file to DATA_DIR/failed/<filename>, logs error to console",
-        "instrumentation.ts (Next.js instrumentation hook) exists and calls startInboxWatcher() in the register() function",
+        "GET /api/bridge/jobs/next?wait_seconds=N endpoint created",
+        "Returns 401 if Authorization: Bearer <BRIDGE_SECRET> is missing or wrong",
+        "Polls jobs table for next status='queued' row for up to wait_seconds (max 30) using polling loop with 500ms sleep; returns { job } with status 200 when found",
+        "Returns 204 (no body) if no job found within timeout",
+        "POST /api/bridge/jobs/[id]/claim endpoint created",
+        "Atomically sets status='claimed' and claimed_at=now() using UPDATE WHERE status='queued'; returns 200 with job row on success",
+        "Returns 409 { \"error\": \"already claimed\" } if job is not in queued status",
+        "Returns 401 without valid BRIDGE_SECRET",
+        "BRIDGE_SECRET added to .env.example",
         "Typecheck passes"
       ],
       "priority": 9,
@@ -149,16 +163,15 @@
       "notes": ""
     },
     {
-      "id": "US-010",
-      "title": "List briefings API",
-      "description": "As the frontend, I need to fetch the list of active briefings for the inbox and history views.",
+      "id": "US-203",
+      "title": "Hub Bridge API — progress, complete, fail endpoints",
+      "description": "As the Mac Bridge, I need to report job progress and final state back to the Hub so the owner can see what is happening.",
       "acceptanceCriteria": [
-        "app/api/briefings/route.ts exports GET handler",
-        "Returns { briefings: [...] } ordered by created_at DESC",
-        "Each item shape: { slug, title, source: { name, mark, tone }, status, card_count, unread_count, created_at }",
-        "Excludes rows where status='deleted'",
-        "Includes rows where status='completed' (history view needs these)",
-        "Returns { briefings: [] } if no rows exist",
+        "POST /api/bridge/jobs/[id]/progress accepts { pct: number, label: string }; updates progress_pct and progress_label; sets status='running' and started_at (if not already set); returns 200 { ok: true }; requires BRIDGE_SECRET",
+        "POST /api/bridge/jobs/[id]/complete accepts { result_json?: string }; sets status='succeeded', finished_at=now(), stores result_json; returns 200 { ok: true }; requires BRIDGE_SECRET",
+        "POST /api/bridge/jobs/[id]/fail accepts { error_message: string }; sets status='failed', finished_at=now(), stores error_message; returns 200 { ok: true }; requires BRIDGE_SECRET",
+        "All three return 401 without valid BRIDGE_SECRET",
+        "All three return 404 if job id not found",
         "Typecheck passes"
       ],
       "priority": 10,
@@ -166,14 +179,15 @@
       "notes": ""
     },
     {
-      "id": "US-011",
-      "title": "Get single briefing API",
-      "description": "As the frontend, I need to fetch a briefing and all its cards for the briefing session view.",
+      "id": "US-204",
+      "title": "Hub user API — create and list jobs",
+      "description": "As the owner, I need to create pipeline jobs from the UI and list all jobs with their current state.",
       "acceptanceCriteria": [
-        "app/api/briefings/[slug]/route.ts exports GET handler",
-        "Returns 404 JSON if slug not found or status='deleted'",
-        "Returns briefing + ordered cards: { slug, title, source, status, created_at, cards: [{ id, position, type, priority, title, summary, body, meta, action_label, reference, status, action_choice }] }",
-        "If briefing status is 'unread', updates it to 'in_progress' before returning",
+        "POST /api/jobs requires owner auth; accepts { job_type: string, title: string, input?: { path?: string } }; inserts job with status='queued' and created_at=now(); returns 201 { id, job_type, title, status, created_at }",
+        "POST /api/jobs returns 400 if job_type is not one of: plaud, prompt, email, deepen, pdf-clone, sap-note, rfp-response, report",
+        "GET /api/jobs requires owner auth; returns { jobs: [...], last_bridge_seen: number | null } ordered by created_at DESC",
+        "Each job in the list includes: id, job_type, title, status, progress_pct, progress_label, error_message (last 200 chars), created_at, claimed_at, started_at, finished_at",
+        "last_bridge_seen is the most recent claimed_at timestamp across all jobs (null if no jobs have been claimed)",
         "Typecheck passes"
       ],
       "priority": 11,
@@ -181,16 +195,15 @@
       "notes": ""
     },
     {
-      "id": "US-012",
-      "title": "Card review and action API",
-      "description": "As the frontend, I need to record the user's decision on each card.",
+      "id": "US-205",
+      "title": "Hub user API — cancel job",
+      "description": "As the owner, I need to cancel a queued job before the Bridge picks it up.",
       "acceptanceCriteria": [
-        "app/api/cards/[id]/route.ts exports PATCH handler",
-        "Accepts body { status: 'reviewed' } or { status: 'actioned', action_choice: string }",
-        "Returns 400 if status is not 'reviewed' or 'actioned'",
-        "Returns 404 if card id not found",
-        "Updates card status, action_choice (if actioned), and reviewed_at timestamp",
-        "Returns { ok: true }",
+        "POST /api/jobs/[id]/cancel endpoint created; requires owner auth",
+        "Sets status='cancelled' and finished_at=now() if job is currently queued",
+        "Returns 200 { ok: true } on success",
+        "Returns 409 { \"error\": \"Job is not in a cancellable state\" } if status is not queued",
+        "Returns 404 if job id not found",
         "Typecheck passes"
       ],
       "priority": 12,
@@ -198,17 +211,17 @@
       "notes": ""
     },
     {
-      "id": "US-013",
-      "title": "Briefing completion API with cascading purge",
-      "description": "As the frontend, I need to mark a briefing as done and purge all content so the security guarantee is real.",
+      "id": "US-301",
+      "title": "Bridge skeleton and config",
+      "description": "As the owner, I need a runnable Bridge script with clear startup validation so I know immediately if something is misconfigured.",
       "acceptanceCriteria": [
-        "app/api/briefings/[slug]/complete/route.ts exports POST handler",
-        "Returns 404 if slug not found",
-        "Purge sequence: (1) delete DATA_DIR/briefings/<slug>.json (no error if missing), (2) set cards title/summary/body/action_label/reference to null in DB, (3) set briefing status='deleted' and completed_at=now",
-        "All purge steps complete before response is sent",
-        "Returns { ok: true, actions_count: N } where N = count of cards with status='actioned'",
-        "After completion GET /api/briefings/:slug returns 404",
-        "Briefing row remains in DB as tombstone with status='deleted' and no content",
+        "bridge/package.json created with { \"type\": \"module\" } and dotenv as a dependency",
+        "bridge/config.js reads HUB_URL (required), BRIDGE_SECRET (required), VAULT_ROOT (required, must be an existing directory), CLAUDE_PATH (optional, defaults to ~/.local/bin/claude expanded)",
+        "bridge/index.js is the entry point; imports config.js and validates all required values at startup",
+        "If any required value is missing or VAULT_ROOT does not exist as a directory, prints a clear error message to stderr and calls process.exit(1)",
+        "On successful startup, prints: Bridge ready. Polling <HUB_URL> for jobs. Ctrl-C to stop.",
+        "bridge/.env.example created with: HUB_URL=https://brief.haegens.be, BRIDGE_SECRET=, VAULT_ROOT=/path/to/vault, CLAUDE_PATH=",
+        "node bridge/index.js (with a valid .env) starts and prints the ready message without error",
         "Typecheck passes"
       ],
       "priority": 13,
@@ -216,14 +229,16 @@
       "notes": ""
     },
     {
-      "id": "US-014",
-      "title": "Sources API",
-      "description": "As the frontend, I need to fetch the list of agent sources that have published briefings.",
+      "id": "US-302",
+      "title": "Bridge polling loop",
+      "description": "As the Mac Bridge, I need a resilient polling loop that claims and runs jobs, handling network errors with exponential backoff.",
       "acceptanceCriteria": [
-        "app/api/sources/route.ts exports GET handler",
-        "Returns { sources: [...] } ordered by last_briefing_at DESC nulls last",
-        "Each item: { id, name, mark, tone, last_briefing_at, briefings_this_week, unread_count }",
-        "Returns { sources: [] } if no sources exist",
+        "bridge/poll.js exports startPolling(config) that continuously long-polls GET <HUB_URL>/api/bridge/jobs/next?wait_seconds=20 with Authorization: Bearer <BRIDGE_SECRET>",
+        "On HTTP 200: immediately POSTs to /api/bridge/jobs/:id/claim; if claim returns 200 dispatches to runner; if 409 re-polls immediately",
+        "On HTTP 204: re-polls immediately",
+        "On network error or unexpected HTTP status: logs the error and waits with exponential backoff starting at 5 seconds, doubling up to 60 seconds max, then re-polls",
+        "On SIGINT or SIGTERM: stops accepting new jobs; if a job is running waits for it to finish or 30 seconds then exits with code 0",
+        "bridge/index.js calls startPolling(config) after startup validation",
         "Typecheck passes"
       ],
       "priority": 14,
@@ -231,93 +246,187 @@
       "notes": ""
     },
     {
-      "id": "US-015",
-      "title": "Wire inbox view to real data",
-      "description": "As the user, I want the inbox to show my actual briefings instead of hardcoded mock data.",
+      "id": "US-303",
+      "title": "Bridge runner and PLAUD pipeline",
+      "description": "As the owner, I need the Bridge to dispatch jobs to the correct pipeline and run the PLAUD ingest pipeline via the Claude Code CLI.",
       "acceptanceCriteria": [
-        "InboxView component fetches from GET /api/briefings on mount using useEffect + fetch",
-        "Hero callout shows real count of unread/in_progress briefings (the '03' number becomes dynamic)",
-        "Briefing list renders real briefings from API; each row shows source mark, source tone, title, created_at, and unread card count",
-        "Date in greeting is dynamic: new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })",
-        "'Interactive prototype' pill removed from topbar",
-        "Loading skeleton or spinner shown while fetching",
-        "Empty state shown if briefings array is empty: 'Your agents have nothing to report yet.'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "bridge/runner.js exports runJob(job, config) that dispatches to the correct pipeline module based on job.job_type",
+        "bridge/pipelines/plaud.js exports run(job, config) that reads _Ingest/PLAUD.md from config.VAULT_ROOT/_Ingest/PLAUD.md",
+        "Pipeline spawns config.CLAUDE_PATH with args ['--print', '--dangerously-skip-permissions'] using { shell: false, cwd: config.VAULT_ROOT }",
+        "Pipeline passes the prompt file content via stdin",
+        "Pipeline POSTs to /api/bridge/jobs/:id/progress every 5 seconds with incrementing pct (1–95) and label 'Running PLAUD pipeline…'",
+        "On Claude exit code 0: POSTs to /api/bridge/jobs/:id/complete",
+        "On non-zero exit code: POSTs to /api/bridge/jobs/:id/fail with last 500 chars of combined stdout+stderr as error_message",
+        "runner.js logs a clear error and calls fail if job_type is unknown",
+        "Typecheck passes"
       ],
       "priority": 15,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-016",
-      "title": "Wire briefing session to real data",
-      "description": "As the user, I want the briefing session to show real cards from a selected briefing and record my decisions to the server.",
+      "id": "US-304",
+      "title": "Bridge runners — PROMPT, EMAIL, DEEPEN, PDF-CLONE",
+      "description": "As the owner, I need four pipeline runners so I can trigger general ingestion, email processing, knowledge deepening, and PDF cloning from the Hub.",
       "acceptanceCriteria": [
-        "InboxView passes the selected briefing slug to Home so BriefingView can fetch it",
-        "BriefingView fetches from GET /api/briefings/:slug on mount",
-        "Cards array is driven by API response (not hardcoded)",
-        "Reviewed action calls PATCH /api/cards/:id with { status: 'reviewed' }",
-        "Needs-action choice calls PATCH /api/cards/:id with { status: 'actioned', action_choice: label }",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "bridge/pipelines/prompt.js exports run(job, config); reads _Ingest/PROMPT.md; prepends 'Target path: <job.input.path>\\n\\n' to stdin when input.path is provided",
+        "bridge/pipelines/email.js exports run(job, config); reads _Ingest/EMAIL.md; no path input",
+        "bridge/pipelines/deepen.js exports run(job, config); reads _Ingest/DEEPEN.md; prepends 'Target path: <job.input.path>\\n\\n' to stdin when input.path is provided",
+        "bridge/pipelines/pdf-clone.js exports run(job, config); reads _Ingest/PDF-CLONE.md; immediately POSTs fail with error 'pdf-clone requires input.path' if input.path is absent; prepends 'Target path: <job.input.path>\\n\\n' to stdin when path is present",
+        "All four follow the same spawn/progress/complete/fail pattern as US-303",
+        "runner.js dispatches job_types prompt, email, deepen, pdf-clone to the correct modules",
+        "Typecheck passes"
       ],
       "priority": 16,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-017",
-      "title": "Wire completion to real purge API",
-      "description": "As the user, I want 'Mark done & delete' to actually purge the briefing on the server.",
+      "id": "US-305",
+      "title": "Bridge runners — SAP-NOTE and RFP-RESPONSE",
+      "description": "As the owner, I need runners for SAP note ingestion and RFP response so I can trigger those workflows from the Hub.",
       "acceptanceCriteria": [
-        "'Mark done & delete' button calls POST /api/briefings/:slug/complete",
-        "Deleted/success screen only shown after API responds { ok: true }",
-        "If API returns error, an inline error message is shown and the briefing is not marked deleted in UI",
-        "After successful purge, navigating back to inbox no longer shows the briefing",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "bridge/pipelines/sap-note.js exports run(job, config); reads _Ingest/SAP-NOTE.md; prepends 'Target path: <job.input.path>\\n\\n' to stdin when input.path is provided",
+        "bridge/pipelines/rfp-response.js exports run(job, config); reads _Ingest/RFP-RESPONSE.md; immediately POSTs fail with error 'rfp-response requires input.path' if input.path is absent; prepends 'Target path: <job.input.path>\\n\\n' to stdin when path is present",
+        "Both follow the same spawn/progress/complete/fail pattern as US-303",
+        "runner.js dispatches job_types sap-note and rfp-response to the correct modules",
+        "Typecheck passes"
       ],
       "priority": 17,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-018",
-      "title": "Wire history and sources views to real data",
-      "description": "As the user, I want the history and sources views to show real data instead of hardcoded arrays.",
+      "id": "US-306",
+      "title": "Bridge runner — REPORT pipeline",
+      "description": "As the owner, I need the REPORT pipeline runner so I can push a card briefing report from the Hub.",
       "acceptanceCriteria": [
-        "HistoryView fetches from GET /api/briefings on mount",
-        "Filter buttons (All / Active / Completed / Needs action) filter the list client-side",
-        "Completed rows show status pill 'Completed — content deleted' and have no clickable arrow",
-        "Active rows show status pill 'Reviewed — content active' and link to the briefing session",
-        "SourcesView fetches from GET /api/sources on mount",
-        "Each source card renders real name, mark, tone, last_briefing_at, unread_count, briefings_this_week",
-        "Empty state shown in SourcesView if sources array is empty",
-        "Stage 2 preview card ('Agent work queue') remains as a static element",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "bridge/pipelines/report.js exports run(job, config); reads _Ingest/REPORT.md from VAULT_ROOT; no path input required",
+        "Follows the same spawn/progress/complete/fail pattern as US-303",
+        "runner.js dispatches job_type report to the report module",
+        "runner.js returns a clear error (calls fail) if job_type is not any of the 8 known types",
+        "Typecheck passes"
       ],
       "priority": 18,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-019",
-      "title": "Docker packaging",
-      "description": "As a Coolify operator, I need a Dockerfile and docker-compose.yml so the app deploys as a container.",
+      "id": "US-401",
+      "title": "Agents tab in navigation",
+      "description": "As the owner, I need an Agents tab in the main navigation so I can access pipeline management without leaving the Hub.",
       "acceptanceCriteria": [
-        "Dockerfile uses multi-stage build: stage 1 (node:22-slim + build-essential) installs deps and runs next build; stage 2 (node:22-slim) copies .next/standalone output",
-        "next.config.ts sets output: 'standalone'",
-        "Final image runs node server.js on port 3000",
-        "BRIEFING_HUB_API_KEY and DATA_DIR accepted as ENV / ARG",
-        "VOLUME /data declared in Dockerfile",
-        "docker-compose.yml defines one service with volume mount ./data:/data and env_file: .env.example",
-        ".env.example exists with BRIEFING_HUB_API_KEY=change_me_40_chars and DATA_DIR=/data",
-        "docker build -t briefing-hub . completes without errors",
-        "Typecheck passes"
+        "A fifth nav tab labelled 'Agents' added to the tab bar in app/_components/HubClient.tsx",
+        "Tab renders <AgentsView /> component (app/_components/AgentsView.tsx, may be a stub for this story)",
+        "Tab shows a numeric badge with the count of jobs in queued or running status; badge is hidden when count is 0",
+        "Badge count is derived from job data fetched by AgentsView and passed up to the parent or managed via shared state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-402",
+      "title": "Agent job list",
+      "description": "As the owner, I need to see all pipeline jobs with their current status so I know what is running, done, or failed.",
+      "acceptanceCriteria": [
+        "AgentsView fetches GET /api/jobs on mount",
+        "When any job has status='running', the view re-fetches every 5 seconds; stops polling when no running jobs",
+        "Jobs displayed in three sections: Active (status queued or running), Done (status succeeded or cancelled), Failed (status failed)",
+        "Each job card shows: pipeline display name (e.g. 'Sync Plaud recordings'), title, status pill with appropriate color (blue=running, grey=queued, green=succeeded, red=failed, grey=cancelled), created_at formatted as relative time (e.g. '3 min ago'), progress bar visible and animated when status=running, error_message truncated to 200 chars shown when status=failed",
+        "Empty state when no jobs exist: 'No agent jobs yet. Trigger a pipeline below.'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-403",
+      "title": "Pipeline trigger panel",
+      "description": "As the owner, I need a trigger panel to start any Mitchell pipeline from the Hub with an optional file path.",
+      "acceptanceCriteria": [
+        "Below the job list, a section titled 'Run a pipeline' renders one row per pipeline type",
+        "Rows: PLAUD ('Sync Plaud recordings', no path input), PROMPT ('Ingest document or URL', path optional placeholder 'File path or URL'), EMAIL ('Process inbox emails', no path), DEEPEN ('Deepen knowledge', path optional placeholder 'Target note path'), PDF-CLONE ('Clone PDF to Markdown', path required placeholder 'PDF file path'), SAP-NOTE ('Ingest SAP note', path optional placeholder 'Note file or URL'), RFP-RESPONSE ('Process RFP requirements', path required placeholder 'Requirements file path'), REPORT ('Push briefing report', no path)",
+        "Each row has a Run button that calls POST /api/jobs with correct job_type, auto-generated title (e.g. 'PLAUD sync — 12 Aug 2026'), and input.path if entered",
+        "PDF-CLONE and RFP-RESPONSE Run buttons are disabled until the path input is non-empty",
+        "Run button is disabled for 2 seconds after click to prevent double-submit",
+        "On successful POST, the new job immediately appears at the top of the Active section without a full page reload",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-404",
+      "title": "Bridge status indicator",
+      "description": "As the owner, I need a Bridge status chip so I know whether my Mac is connected and jobs will execute.",
+      "acceptanceCriteria": [
+        "Top of AgentsView shows a status chip before the job list",
+        "'Bridge online' with a green dot displayed if last_bridge_seen from GET /api/jobs is within the last 90 seconds",
+        "'Bridge offline — jobs will wait' with a grey dot displayed otherwise",
+        "Status chip updates on each poll cycle (every 5s when jobs are running, or on each manual re-fetch)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-405",
+      "title": "Cancel job from UI",
+      "description": "As the owner, I need to cancel a queued job from the UI so I can abort work before the Bridge picks it up.",
+      "acceptanceCriteria": [
+        "Jobs in Active section with status='queued' show a small 'Cancel' button",
+        "Jobs with status='running' do not show the Cancel button",
+        "Pressing Cancel calls POST /api/jobs/:id/cancel",
+        "On 200 response: job card status immediately updates to 'Cancelled' in the UI without a full re-fetch",
+        "On 409 response: shows an inline toast or alert message 'Job is already running — it will complete normally'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-501",
+      "title": "Authorization integration tests",
+      "description": "As a developer, I need automated tests covering authorization on every route so a future change cannot silently remove access controls.",
+      "acceptanceCriteria": [
+        "tests/auth.test.mjs exists and is compatible with the existing test runner",
+        "Tests GET /api/briefings, GET /api/sources, PATCH /api/cards/[id], POST /api/briefings/:slug/complete each with: missing JWT header (expect 401), malformed JWT (expect 401), expired JWT (expect 401), valid JWT for wrong email (expect 401)",
+        "Tests POST /api/ingest with: missing bearer token (expect 401), wrong bearer token (expect 401), valid bearer token with valid payload (expect 200)",
+        "Tests that a valid agent bearer token presented to GET /api/briefings returns 401",
+        "Tests run with npm test and all pass",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-502",
+      "title": "End-to-end smoke test for job lifecycle",
+      "description": "As a developer, I need an E2E test for the full poll-claim-progress-complete cycle so regressions in the Bridge API are caught automatically.",
+      "acceptanceCriteria": [
+        "bridge/pipelines/stub.js exports run(job, config) that sleeps 200ms then resolves successfully (for test use only)",
+        "POST /api/jobs accepts job_type='stub' only when NODE_ENV=test (returns 400 in production)",
+        "tests/e2e-pipeline.test.mjs starts the Hub server in test mode (DEV_SKIP_AUTH=true, NODE_ENV=test)",
+        "Test creates a stub job via POST /api/jobs and receives a job id",
+        "Test starts a Bridge child process with stub mode config pointing at the test Hub",
+        "Test polls GET /api/jobs until the job reaches status='succeeded' or times out after 10 seconds",
+        "Test asserts that progress_pct was updated at least once before succeeded",
+        "npm test runs both auth.test.mjs and e2e-pipeline.test.mjs and all pass",
+        "Typecheck passes"
+      ],
+      "priority": 25,
       "passes": true,
       "notes": ""
     }

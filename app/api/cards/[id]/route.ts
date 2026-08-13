@@ -2,11 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { cards } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { requireOwner } from "@/src/lib/auth";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    await requireOwner(req);
+  } catch (res) {
+    return res as Response;
+  }
+  const contentType = req.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return NextResponse.json({ ok: false, error: "Unsupported Media Type" }, { status: 415 });
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    const origin = req.headers.get("origin") ?? "";
+    if (origin !== "https://brief.haegens.be") {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   const { id } = await params;
   const cardId = parseInt(id, 10);
   if (isNaN(cardId)) {

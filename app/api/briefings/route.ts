@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { briefings, cards } from "@/db/schema";
 import { ne, eq, sql } from "drizzle-orm";
+import { requireOwner } from "@/src/lib/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  try {
+    await requireOwner(request);
+  } catch (res) {
+    return res as Response;
+  }
   try {
     const db = getDb();
     const rows = db
@@ -17,6 +23,7 @@ export async function GET() {
         created_at: briefings.created_at,
         card_count: sql<number>`count(${cards.id})`,
         unread_count: sql<number>`sum(case when ${cards.status} = 'unread' then 1 else 0 end)`,
+        attention_count: sql<number>`sum(case when ${cards.status} = 'unread' and ${cards.priority} in ('critical', 'high') then 1 else 0 end)`,
       })
       .from(briefings)
       .leftJoin(cards, eq(cards.briefing_id, briefings.id))
@@ -32,6 +39,7 @@ export async function GET() {
       status: r.status,
       card_count: r.card_count ?? 0,
       unread_count: r.unread_count ?? 0,
+      attention_count: r.attention_count ?? 0,
       created_at: r.created_at,
     }));
 
