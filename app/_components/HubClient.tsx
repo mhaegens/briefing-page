@@ -58,6 +58,7 @@ type BriefingCard = {
   actionLabel?: string;
   reference?: string;
   status: "unread" | "reviewed" | "actioned";
+  action_job_type?: string | null;
 };
 
 type BriefingListItem = {
@@ -410,6 +411,7 @@ export default function HubClient() {
         id: number; position: number; type: CardType; priority: Priority;
         title: string; summary: string; body: string[]; meta: string;
         content?: ContentBlock[]; action_label?: string; reference?: string; status: "unread" | "reviewed" | "actioned";
+        action_job_type?: string | null;
       }) => ({
         id: c.id,
         position: c.position,
@@ -426,6 +428,7 @@ export default function HubClient() {
         actionLabel: c.action_label,
         reference: c.reference,
         status: c.status,
+        action_job_type: c.action_job_type,
       }));
       setLiveCards(mapped);
       setBriefingTitle(data.title);
@@ -659,6 +662,7 @@ export default function HubClient() {
                 }
               }}
               onReset={resetSession}
+              onNavigateToAgents={() => switchView("agents")}
             />
           )}
 
@@ -830,6 +834,7 @@ function BriefingView({
   onKeep,
   onDelete,
   onReset,
+  onNavigateToAgents,
 }: {
   card: BriefingCard | null;
   briefingTitle: string;
@@ -851,6 +856,7 @@ function BriefingView({
   onKeep: () => void;
   onDelete: () => void;
   onReset: () => void;
+  onNavigateToAgents: () => void;
 }) {
   if (deleted) {
     return (
@@ -942,9 +948,11 @@ function BriefingView({
               <p>{card.summary}</p>
             </div>
             <CardEditorialPreview card={card} />
-            {card.actionLabel && (
+            {card.actionLabel && card.action_job_type ? (
+              <ActionJobButton card={card} onJobCreated={onNavigateToAgents} />
+            ) : card.actionLabel ? (
               <div className="action-hint"><span aria-hidden="true">↳</span><p><strong>Next action</strong>{card.actionLabel}</p></div>
-            )}
+            ) : null}
             <button className="read-more" onClick={onExpand}>Read full note <span>↗</span></button>
           </div>
         </div>
@@ -1013,6 +1021,47 @@ function ActionSheet({ card, onClose, onChoose }: { card: BriefingCard; onClose:
     </div>
   );
 }
+
+function ActionJobButton({ card, onJobCreated }: { card: BriefingCard; onJobCreated: () => void }) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | string>("idle");
+
+  async function handleClick() {
+    setState("loading");
+    try {
+      const res = await fetch(`/api/cards/${card.id}/action`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setState((data as { error?: string }).error ?? "Error — try again");
+        return;
+      }
+      setState("done");
+      setTimeout(() => onJobCreated(), 2000);
+    } catch {
+      setState("Network error — try again");
+    }
+  }
+
+  const isLoading = state === "loading";
+  const isDone = state === "done";
+  const isError = state !== "idle" && state !== "loading" && state !== "done";
+
+  return (
+    <div className="action-hint action-hint-button">
+      <span aria-hidden="true">↳</span>
+      <div>
+        <strong>Next action</strong>
+        <button
+          className={`action-job-btn${isDone ? " done" : isError ? " error" : ""}`}
+          onClick={handleClick}
+          disabled={isLoading || isDone}
+        >
+          {isLoading ? "Creating job…" : isDone ? "Job created" : isError ? state : card.actionLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 function HistoryView({ onOpenBriefing }: { onOpenBriefing: (slug: string) => void }) {
   const [briefingList, setBriefingList] = useState<BriefingListItem[]>([]);

@@ -24,6 +24,9 @@ export interface BriefingPayload {
     meta: string;
     action_label?: string;
     reference?: string;
+    action_job_type?: string;
+    action_job_title?: string;
+    action_job_input?: string;
   }>;
 }
 
@@ -72,6 +75,9 @@ export async function ingestBriefing(
         meta: card.meta,
         action_label: card.action_label ?? null,
         reference: card.reference ?? null,
+        action_job_type: card.action_job_type ?? null,
+        action_job_title: card.action_job_title ?? null,
+        action_job_input: card.action_job_input ?? null,
       })
       .run();
   }

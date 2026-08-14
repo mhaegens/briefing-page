@@ -1,39 +1,30 @@
 {
   "project": "Briefing Hub",
-  "branchName": "ralph/briefing-hub-stage-2",
-  "description": "Stage 2: Security hardening (CF Access JWT auth, headers, CSRF, purge hygiene), Mac Bridge (Node.js polling script that executes Mitchell ingest pipelines via Claude Code CLI), and Agent Portal UI (Agents tab to trigger and monitor pipeline jobs).",
+  "branchName": "ralph/outlook-email-ingestion",
+  "description": "Two-phase email ingestion via Mac Bridge with JWD hybrid: JWD fetches emails and stages them to Sources/email/; email-fetch classifies and posts Hub review card; email-commit (triggered by Hub action button) writes vault entries. JWD also picks up reply drafts from _EmailOutbox/ for Outlook.",
   "userStories": [
     {
-      "id": "US-101",
-      "title": "Upgrade Next.js and React to patched versions",
-      "description": "As a developer, I need the production dependencies patched so no critical or high CVEs remain in the production bundle.",
+      "id": "US-001",
+      "title": "Create JWD email skill prompt files",
+      "description": "As a user, I need two prompt files I can paste into Joule Work Desktop so JWD can stage emails into the vault and later pick up reply drafts for sending — no installation required.",
       "acceptanceCriteria": [
-        "next upgraded to >=15.5.23 in package.json",
-        "react and react-dom upgraded to >=19.0.8 in package.json",
-        "eslint-config-next upgraded to match the new Next.js major version",
-        "npm install run to regenerate package-lock.json",
-        "npm audit --omit=dev reports zero high or critical production advisories",
-        "npm run build completes without errors",
+        "_Ingest/JWD-EMAIL-FETCH.md created in the Mitchell vault with instructions for JWD to: read emails since last-run.json timestamp (default 7 days), format each as a clean .md file with YAML frontmatter (from, to, subject, date, message_id), write to Sources/email/YYYY-MM-DD-HHMMSS-{subject-slug}.md",
+        "_Ingest/JWD-EMAIL-OUTBOX.md created in the Mitchell vault with instructions for JWD to: read all .md files from _Ingest/_EmailOutbox/, parse frontmatter (to, cc, subject, in_reply_to), create Outlook draft for each, move processed files to _Ingest/_EmailOutbox/sent/",
+        "Both files include the Mitchell vault absolute path so JWD knows where to read/write",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": ""
+      "notes": "These are prompts for the user to paste into JWD — not code. JWD handles all Outlook I/O; Claude handles vault intelligence."
     },
     {
-      "id": "US-102",
-      "title": "Owner authorization middleware",
-      "description": "As a developer, I need a server-side auth helper that validates the Cloudflare Access JWT so every protected route has a second security layer beyond the edge.",
+      "id": "US-002",
+      "title": "Hub DB schema — card action fields",
+      "description": "As a developer, I need the Hub's cards table to store follow-up job details so the action button knows what job to create.",
       "acceptanceCriteria": [
-        "src/lib/auth.ts exported function requireOwner(request: Request): Promise<void>",
-        "Reads JWT from Cf-Access-Jwt-Assertion header",
-        "Fetches Cloudflare JWKS from https://<CLOUDFLARE_ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs and validates JWT signature using the jose library",
-        "Verifies aud claim equals CLOUDFLARE_ACCESS_AUDIENCE env var",
-        "Verifies email claim equals BRIEFING_HUB_OWNER_EMAIL env var",
-        "Throws a Response with status 401 and body {\"error\":\"Unauthorized\"} on any validation failure",
-        "Fails closed (throws 401) if any of the three required env vars is absent, UNLESS NODE_ENV !== 'production' AND DEV_SKIP_AUTH=true",
-        ".env.example updated with BRIEFING_HUB_OWNER_EMAIL=, CLOUDFLARE_ACCESS_TEAM_DOMAIN=, CLOUDFLARE_ACCESS_AUDIENCE=, DEV_SKIP_AUTH=false",
-        "jose added to package.json dependencies",
+        "db/schema.ts adds 3 nullable text columns to the cards table: action_job_type, action_job_title, action_job_input",
+        "A migration file is created in db/migrations/ and applied to the SQLite database",
+        "Existing card rows without these fields are unaffected",
         "Typecheck passes"
       ],
       "priority": 2,
@@ -41,17 +32,13 @@
       "notes": ""
     },
     {
-      "id": "US-103",
-      "title": "Protect every private API route",
-      "description": "As the owner, I need every confidential route to enforce server-side authorization so an edge misconfiguration cannot expose briefing data.",
+      "id": "US-003",
+      "title": "Hub jobs API — register email-fetch and email-commit job types",
+      "description": "As the Mac Bridge, I need the Hub to accept email-fetch and email-commit as valid job types.",
       "acceptanceCriteria": [
-        "requireOwner(request) called at the top of GET /api/briefings handler",
-        "requireOwner(request) called at the top of GET /api/briefings/[slug] handler",
-        "requireOwner(request) called at the top of GET /api/sources handler",
-        "requireOwner(request) called at the top of PATCH /api/cards/[id] handler",
-        "requireOwner(request) called at the top of POST /api/briefings/[slug]/complete handler",
-        "Each protected route returns 401 with generic body {\"error\":\"Unauthorized\"} when auth fails",
-        "POST /api/ingest is NOT changed by this story — it keeps its existing bearer token check",
+        "app/api/jobs/route.ts VALID_JOB_TYPES array includes 'email-fetch' and 'email-commit'",
+        "POST /api/jobs with job_type 'email-fetch' returns 201",
+        "POST /api/jobs with job_type 'email-commit' and input: { path: '...' } returns 201",
         "Typecheck passes"
       ],
       "priority": 3,
@@ -59,37 +46,31 @@
       "notes": ""
     },
     {
-      "id": "US-104",
-      "title": "Server-rendered owner page",
-      "description": "As the owner, I need the main page to authorize server-side before returning any HTML so an origin-bypass attacker cannot load the UI shell.",
+      "id": "US-004",
+      "title": "Hub ingest API — persist card action fields",
+      "description": "As the email-fetch pipeline, I need the Hub's ingest endpoint to accept and store the new action fields when a card is POSTed.",
       "acceptanceCriteria": [
-        "app/_components/HubClient.tsx created with 'use client' directive containing the existing client-side UI from app/page.tsx",
-        "app/page.tsx converted to an async server component that calls requireOwner(request) then renders <HubClient />",
-        "export const dynamic = 'force-dynamic' set in app/page.tsx",
-        "Unauthenticated request to / returns 401, not the UI HTML (when DEV_SKIP_AUTH is not set)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "app/api/ingest/route.ts accepts action_job_type, action_job_title, action_job_input on card objects in the POST payload",
+        "All three fields are persisted to the cards DB row when present",
+        "Fields are stored as null when absent — existing cards without these fields ingest without error",
+        "Typecheck passes"
       ],
       "priority": 4,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-105",
-      "title": "Security response headers",
-      "description": "As a security-conscious operator, I need confidentiality and anti-framing headers applied to every response so briefing content cannot be cached, indexed, or framed.",
+      "id": "US-005",
+      "title": "Hub cards action API endpoint",
+      "description": "As the Hub frontend, I need an endpoint to call when the user clicks 'Approve and ingest' so it creates the follow-up job automatically.",
       "acceptanceCriteria": [
-        "next.config.ts headers block applies to all paths (source: '/(.*)'): Cache-Control: private, no-store, max-age=0",
-        "Header X-Robots-Tag: noindex, nofollow, noarchive, nosnippet applied",
-        "Header Strict-Transport-Security: max-age=31536000; includeSubDomains applied",
-        "Header X-Content-Type-Options: nosniff applied",
-        "Header X-Frame-Options: DENY applied",
-        "Header Referrer-Policy: no-referrer applied",
-        "Header Cross-Origin-Opener-Policy: same-origin applied",
-        "Header Cross-Origin-Resource-Policy: same-origin applied",
-        "Header Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' applied",
-        "poweredByHeader: false set in next.config.ts",
-        "public/robots.txt created with content: User-agent: *\\nDisallow: /",
+        "POST /api/cards/[id]/action endpoint created at app/api/cards/[id]/action/route.ts",
+        "Requires owner auth via requireOwner",
+        "Reads action_job_type, action_job_title, action_job_input from the card row by id",
+        "Returns 400 { error: 'No action configured for this card' } if action_job_type is null",
+        "Returns 404 if card id not found",
+        "Inserts a new job row with the card's action_job_type, action_job_title, and input_json (parsed from action_job_input)",
+        "Returns 201 { job_id: N }",
         "Typecheck passes"
       ],
       "priority": 5,
@@ -97,31 +78,33 @@
       "notes": ""
     },
     {
-      "id": "US-106",
-      "title": "Input limits and CSRF",
-      "description": "As a security-conscious operator, I need payload size limits, origin validation, and timing-safe token comparison so agents cannot overwhelm the server and cross-origin mutations are rejected.",
+      "id": "US-006",
+      "title": "Hub frontend — action button on cards",
+      "description": "As a user, I want to click 'Approve and ingest' directly on the preview card so the commit job starts without navigating to the jobs page.",
       "acceptanceCriteria": [
-        "POST /api/ingest: returns 413 if Content-Length header is absent or > 524288",
-        "POST /api/ingest: bearer token comparison uses crypto.timingSafeEqual (constant-time)",
-        "PATCH /api/cards/[id] and POST /api/briefings/[slug]/complete: return 415 if Content-Type is not application/json",
-        "PATCH /api/cards/[id] and POST /api/briefings/[slug]/complete: return 403 if Origin header is absent or does not equal https://brief.haegens.be (skip when NODE_ENV !== 'production')",
-        "src/schema/briefing.schema.json: maxLength: 300 on title, maxLength: 500 on summary, maxLength: 2000 on each body array item, maxLength: 100 on meta/action_label/reference",
-        "src/schema/briefing.schema.json: maxItems: 100 on cards array and body array",
-        "Typecheck passes"
+        "In app/_components/HubClient.tsx, when a card has both actionLabel and action_job_type: render a <button> instead of the current static hint text div",
+        "Button label is the card's actionLabel value",
+        "Button click POSTs to /api/cards/{id}/action",
+        "During POST: button is disabled and shows a loading indicator",
+        "On success (201): button text changes to 'Job created' for 2 seconds, then the view navigates to the Agents/jobs tab",
+        "On error: button shows the error message and remains clickable for retry",
+        "Cards without action_job_type continue to render actionLabel as static hint text — no regression to existing card display",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
       "passes": true,
       "notes": ""
     },
     {
-      "id": "US-107",
-      "title": "Purge and storage hygiene",
-      "description": "As a privacy-conscious owner, I need the purge operation to cover all content fields, remove processed inbox files, and use secure SQLite deletion.",
+      "id": "US-007",
+      "title": "Mac Bridge — email-fetch and email-commit pipeline handlers",
+      "description": "As the Mac Bridge, I need pipeline handlers for the two new job types so they are dispatched correctly when claimed.",
       "acceptanceCriteria": [
-        "Completion handler executes PRAGMA secure_delete = ON before the purge transaction",
-        "Purge nulls out title, source_name, source_mark, source_tone, json_path columns (tombstone retains only id, slug, status, created_at, completed_at)",
-        "Inbox watcher: after successful ingest, deletes the source file from /data/inbox/ (does not move to /data/processed/)",
-        "Inbox watcher: on failed ingest, logs the error and deletes the source file (does not retain in /data/failed/)",
+        "bridge/pipelines/email-fetch.js created; exports run(job, config); calls runPipeline with promptFile '_Ingest/EMAIL-FETCH.md'; no extraPrefix",
+        "bridge/pipelines/email-commit.js created; exports run(job, config); calls runPipeline with promptFile '_Ingest/EMAIL-COMMIT.md'; passes 'Batch file: ' + job.input?.path + '\\n\\n' as extraPrefix when input.path is present",
+        "Both handlers registered in bridge/poll.js (or runner.js) dispatch map under keys 'email-fetch' and 'email-commit'",
+        "node bridge/index.js starts without errors after the change",
         "Typecheck passes"
       ],
       "priority": 7,
@@ -129,13 +112,14 @@
       "notes": ""
     },
     {
-      "id": "US-201",
-      "title": "Jobs and pipeline_runs DB tables",
-      "description": "As a developer, I need database tables to store pipeline job requests and Bridge execution records so job state persists across restarts.",
+      "id": "US-008",
+      "title": "Create _IngestQueue/ and _EmailOutbox/ staging folders",
+      "description": "As the email pipelines, I need two staging directories inside _Ingest/ — one for batch JSON files between fetch and commit, one for reply drafts waiting for JWD pickup.",
       "acceptanceCriteria": [
-        "db/schema.ts adds jobs table: id (integer pk autoincrement), job_type (text not null), title (text not null), status (text not null default 'queued'), input_json (text), result_json (text), error_message (text), progress_pct (integer default 0), progress_label (text), created_at (integer not null), claimed_at (integer), started_at (integer), finished_at (integer)",
-        "db/schema.ts adds pipeline_runs table: id (integer pk autoincrement), job_id (integer not null references jobs.id), bridge_pid (integer), stderr_tail (text)",
-        "db/index.ts getDb() creates both tables on first run via CREATE TABLE IF NOT EXISTS",
+        "Directory _Ingest/_IngestQueue/ created in the Mitchell vault",
+        "Directory _Ingest/_EmailOutbox/ created in the Mitchell vault",
+        "Directory _Ingest/_EmailOutbox/sent/ created inside _EmailOutbox/",
+        "A .gitkeep file placed inside each new directory",
         "Typecheck passes"
       ],
       "priority": 8,
@@ -143,290 +127,57 @@
       "notes": ""
     },
     {
-      "id": "US-202",
-      "title": "Hub Bridge API — poll and claim endpoints",
-      "description": "As the Mac Bridge, I need to poll for the next queued job and atomically claim it so no two Bridge instances can run the same job.",
+      "id": "US-009",
+      "title": "Create _Ingest/EMAIL-FETCH.md pipeline script",
+      "description": "As the Mac Bridge, I need a Claude prompt script that reads staged email files from Sources/email/, classifies them, and posts a Hub review card — without writing anything to the vault yet.",
       "acceptanceCriteria": [
-        "GET /api/bridge/jobs/next?wait_seconds=N endpoint created",
-        "Returns 401 if Authorization: Bearer <BRIDGE_SECRET> is missing or wrong",
-        "Polls jobs table for next status='queued' row for up to wait_seconds (max 30) using polling loop with 500ms sleep; returns { job } with status 200 when found",
-        "Returns 204 (no body) if no job found within timeout",
-        "POST /api/bridge/jobs/[id]/claim endpoint created",
-        "Atomically sets status='claimed' and claimed_at=now() using UPDATE WHERE status='queued'; returns 200 with job row on success",
-        "Returns 409 { \"error\": \"already claimed\" } if job is not in queued status",
-        "Returns 401 without valid BRIDGE_SECRET",
-        "BRIDGE_SECRET added to .env.example",
+        "_Ingest/EMAIL-FETCH.md created in the Mitchell vault",
+        "Phase 0: reads _Ingest/_IngestQueue/last-run.json; if absent defaults to 7 days ago; globs all .md files in Sources/email/ and filters to those with a date frontmatter field newer than the last-run timestamp",
+        "Phase 0 edge case: if zero files found, posts an information card to Hub ('Inbox clear — nothing staged since {date}') and exits without writing any files",
+        "Phase 1: classifies each email as crm | internal-six | internal-meeting | reference-story | unknown using the same rules as EMAIL.md Phase 1",
+        "Phase 2: scores each email High | Medium | Low using the same rules as EMAIL.md Phase 2",
+        "Phase 3: extracts actions, decisions, risks, competitive mentions, kb_candidate flag using the same rules as EMAIL.md Phase 3",
+        "Phase 4: writes _Ingest/_IngestQueue/email-batch-{YYYY-MM-DD-HHmmss}.json containing an array of email objects each with: source_file (path to .md in Sources/email/), from, subject, date, classification, importance, client (if crm), body_excerpt, actions, decisions, risks, competitive, kb_candidate",
+        "Phase 5: POSTs a preview action card to Hub /api/ingest with action_label 'Approve and ingest', action_job_type 'email-commit', action_job_title 'Ingest email batch {date}', action_job_input { path: '_Ingest/_IngestQueue/email-batch-{timestamp}.json' }, and a body summarising CRM count, internal count, unknown count, total actions extracted, and competitive mentions",
+        "No vault files outside _Ingest/_IngestQueue/ are created or modified",
         "Typecheck passes"
       ],
       "priority": 9,
       "passes": true,
-      "notes": ""
+      "notes": "Reads from Sources/email/ staged by JWD. No Outlook MCP required."
     },
     {
-      "id": "US-203",
-      "title": "Hub Bridge API — progress, complete, fail endpoints",
-      "description": "As the Mac Bridge, I need to report job progress and final state back to the Hub so the owner can see what is happening.",
+      "id": "US-010",
+      "title": "Create _Ingest/EMAIL-COMMIT.md pipeline script",
+      "description": "As the Mac Bridge, I need a Claude prompt script that reads a staged batch file, writes all vault entries, stages reply drafts for JWD pickup, and rolls back on error.",
       "acceptanceCriteria": [
-        "POST /api/bridge/jobs/[id]/progress accepts { pct: number, label: string }; updates progress_pct and progress_label; sets status='running' and started_at (if not already set); returns 200 { ok: true }; requires BRIDGE_SECRET",
-        "POST /api/bridge/jobs/[id]/complete accepts { result_json?: string }; sets status='succeeded', finished_at=now(), stores result_json; returns 200 { ok: true }; requires BRIDGE_SECRET",
-        "POST /api/bridge/jobs/[id]/fail accepts { error_message: string }; sets status='failed', finished_at=now(), stores error_message; returns 200 { ok: true }; requires BRIDGE_SECRET",
-        "All three return 401 without valid BRIDGE_SECRET",
-        "All three return 404 if job id not found",
+        "_Ingest/EMAIL-COMMIT.md created in the Mitchell vault",
+        "Phase 1: reads the batch JSON from the path passed as prefix by the bridge",
+        "Phase 2: tracks every vault file created in an in-memory list before writing; on any write failure deletes all files created in this run, posts a warning card to Hub with what succeeded and what failed, then exits without updating last-run.json",
+        "Phase 2 success path: writes all vault entries per EMAIL.md Phase 5 rules — meeting stubs in Clients/{client}/meetings/, client hub intelligence blocks in Clients/{client}/{client}.md, SIX updates in Internal/SIX-Updates/, internal meeting notes in Internal/meetings/, task inbox in Personal/Tasks/email-tasks-{date}.md, reference story notes in solution reference folders",
+        "Phase 3: for each email in the batch that has extracted actions requiring a reply, writes a draft .md file to _Ingest/_EmailOutbox/{date}-reply-{slug}.md with frontmatter: to, subject, in_reply_to (source filename), and a draft body",
+        "Phase 4: moves all processed source .md files from Sources/email/ to Sources/email/processed/",
+        "Phase 5: deletes the batch file from _Ingest/_IngestQueue/",
+        "Phase 6: writes current ISO timestamp to _Ingest/_IngestQueue/last-run.json",
+        "Phase 7: calls _Ingest/REPORT.md with completion summary",
         "Typecheck passes"
       ],
       "priority": 10,
       "passes": true,
-      "notes": ""
+      "notes": "No Outlook MCP required. Reply drafts go to _EmailOutbox/ for JWD to pick up and create as Outlook drafts."
     },
     {
-      "id": "US-204",
-      "title": "Hub user API — create and list jobs",
-      "description": "As the owner, I need to create pipeline jobs from the UI and list all jobs with their current state.",
+      "id": "US-011",
+      "title": "EMAIL.md — add redirect warning callout",
+      "description": "As a user opening EMAIL.md in an interactive session, I want a clear warning that a better automated pipeline exists so I don't accidentally use the old flow.",
       "acceptanceCriteria": [
-        "POST /api/jobs requires owner auth; accepts { job_type: string, title: string, input?: { path?: string } }; inserts job with status='queued' and created_at=now(); returns 201 { id, job_type, title, status, created_at }",
-        "POST /api/jobs returns 400 if job_type is not one of: plaud, prompt, email, deepen, pdf-clone, sap-note, rfp-response, report",
-        "GET /api/jobs requires owner auth; returns { jobs: [...], last_bridge_seen: number | null } ordered by created_at DESC",
-        "Each job in the list includes: id, job_type, title, status, progress_pct, progress_label, error_message (last 200 chars), created_at, claimed_at, started_at, finished_at",
-        "last_bridge_seen is the most recent claimed_at timestamp across all jobs (null if no jobs have been claimed)",
+        "A prominent callout block is added at the very top of _Ingest/EMAIL.md before any pipeline instructions",
+        "Callout states that EMAIL-FETCH.md is the preferred pipeline for automated and Mac Bridge use",
+        "Callout explicitly asks the user to confirm they intend to use the manual Sources/email/ flow before proceeding",
+        "All existing pipeline instructions below the callout are unchanged",
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-205",
-      "title": "Hub user API — cancel job",
-      "description": "As the owner, I need to cancel a queued job before the Bridge picks it up.",
-      "acceptanceCriteria": [
-        "POST /api/jobs/[id]/cancel endpoint created; requires owner auth",
-        "Sets status='cancelled' and finished_at=now() if job is currently queued",
-        "Returns 200 { ok: true } on success",
-        "Returns 409 { \"error\": \"Job is not in a cancellable state\" } if status is not queued",
-        "Returns 404 if job id not found",
-        "Typecheck passes"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-301",
-      "title": "Bridge skeleton and config",
-      "description": "As the owner, I need a runnable Bridge script with clear startup validation so I know immediately if something is misconfigured.",
-      "acceptanceCriteria": [
-        "bridge/package.json created with { \"type\": \"module\" } and dotenv as a dependency",
-        "bridge/config.js reads HUB_URL (required), BRIDGE_SECRET (required), VAULT_ROOT (required, must be an existing directory), CLAUDE_PATH (optional, defaults to ~/.local/bin/claude expanded)",
-        "bridge/index.js is the entry point; imports config.js and validates all required values at startup",
-        "If any required value is missing or VAULT_ROOT does not exist as a directory, prints a clear error message to stderr and calls process.exit(1)",
-        "On successful startup, prints: Bridge ready. Polling <HUB_URL> for jobs. Ctrl-C to stop.",
-        "bridge/.env.example created with: HUB_URL=https://brief.haegens.be, BRIDGE_SECRET=, VAULT_ROOT=/path/to/vault, CLAUDE_PATH=",
-        "node bridge/index.js (with a valid .env) starts and prints the ready message without error",
-        "Typecheck passes"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-302",
-      "title": "Bridge polling loop",
-      "description": "As the Mac Bridge, I need a resilient polling loop that claims and runs jobs, handling network errors with exponential backoff.",
-      "acceptanceCriteria": [
-        "bridge/poll.js exports startPolling(config) that continuously long-polls GET <HUB_URL>/api/bridge/jobs/next?wait_seconds=20 with Authorization: Bearer <BRIDGE_SECRET>",
-        "On HTTP 200: immediately POSTs to /api/bridge/jobs/:id/claim; if claim returns 200 dispatches to runner; if 409 re-polls immediately",
-        "On HTTP 204: re-polls immediately",
-        "On network error or unexpected HTTP status: logs the error and waits with exponential backoff starting at 5 seconds, doubling up to 60 seconds max, then re-polls",
-        "On SIGINT or SIGTERM: stops accepting new jobs; if a job is running waits for it to finish or 30 seconds then exits with code 0",
-        "bridge/index.js calls startPolling(config) after startup validation",
-        "Typecheck passes"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-303",
-      "title": "Bridge runner and PLAUD pipeline",
-      "description": "As the owner, I need the Bridge to dispatch jobs to the correct pipeline and run the PLAUD ingest pipeline via the Claude Code CLI.",
-      "acceptanceCriteria": [
-        "bridge/runner.js exports runJob(job, config) that dispatches to the correct pipeline module based on job.job_type",
-        "bridge/pipelines/plaud.js exports run(job, config) that reads _Ingest/PLAUD.md from config.VAULT_ROOT/_Ingest/PLAUD.md",
-        "Pipeline spawns config.CLAUDE_PATH with args ['--print', '--dangerously-skip-permissions'] using { shell: false, cwd: config.VAULT_ROOT }",
-        "Pipeline passes the prompt file content via stdin",
-        "Pipeline POSTs to /api/bridge/jobs/:id/progress every 5 seconds with incrementing pct (1–95) and label 'Running PLAUD pipeline…'",
-        "On Claude exit code 0: POSTs to /api/bridge/jobs/:id/complete",
-        "On non-zero exit code: POSTs to /api/bridge/jobs/:id/fail with last 500 chars of combined stdout+stderr as error_message",
-        "runner.js logs a clear error and calls fail if job_type is unknown",
-        "Typecheck passes"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-304",
-      "title": "Bridge runners — PROMPT, EMAIL, DEEPEN, PDF-CLONE",
-      "description": "As the owner, I need four pipeline runners so I can trigger general ingestion, email processing, knowledge deepening, and PDF cloning from the Hub.",
-      "acceptanceCriteria": [
-        "bridge/pipelines/prompt.js exports run(job, config); reads _Ingest/PROMPT.md; prepends 'Target path: <job.input.path>\\n\\n' to stdin when input.path is provided",
-        "bridge/pipelines/email.js exports run(job, config); reads _Ingest/EMAIL.md; no path input",
-        "bridge/pipelines/deepen.js exports run(job, config); reads _Ingest/DEEPEN.md; prepends 'Target path: <job.input.path>\\n\\n' to stdin when input.path is provided",
-        "bridge/pipelines/pdf-clone.js exports run(job, config); reads _Ingest/PDF-CLONE.md; immediately POSTs fail with error 'pdf-clone requires input.path' if input.path is absent; prepends 'Target path: <job.input.path>\\n\\n' to stdin when path is present",
-        "All four follow the same spawn/progress/complete/fail pattern as US-303",
-        "runner.js dispatches job_types prompt, email, deepen, pdf-clone to the correct modules",
-        "Typecheck passes"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-305",
-      "title": "Bridge runners — SAP-NOTE and RFP-RESPONSE",
-      "description": "As the owner, I need runners for SAP note ingestion and RFP response so I can trigger those workflows from the Hub.",
-      "acceptanceCriteria": [
-        "bridge/pipelines/sap-note.js exports run(job, config); reads _Ingest/SAP-NOTE.md; prepends 'Target path: <job.input.path>\\n\\n' to stdin when input.path is provided",
-        "bridge/pipelines/rfp-response.js exports run(job, config); reads _Ingest/RFP-RESPONSE.md; immediately POSTs fail with error 'rfp-response requires input.path' if input.path is absent; prepends 'Target path: <job.input.path>\\n\\n' to stdin when path is present",
-        "Both follow the same spawn/progress/complete/fail pattern as US-303",
-        "runner.js dispatches job_types sap-note and rfp-response to the correct modules",
-        "Typecheck passes"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-306",
-      "title": "Bridge runner — REPORT pipeline",
-      "description": "As the owner, I need the REPORT pipeline runner so I can push a card briefing report from the Hub.",
-      "acceptanceCriteria": [
-        "bridge/pipelines/report.js exports run(job, config); reads _Ingest/REPORT.md from VAULT_ROOT; no path input required",
-        "Follows the same spawn/progress/complete/fail pattern as US-303",
-        "runner.js dispatches job_type report to the report module",
-        "runner.js returns a clear error (calls fail) if job_type is not any of the 8 known types",
-        "Typecheck passes"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-401",
-      "title": "Agents tab in navigation",
-      "description": "As the owner, I need an Agents tab in the main navigation so I can access pipeline management without leaving the Hub.",
-      "acceptanceCriteria": [
-        "A fifth nav tab labelled 'Agents' added to the tab bar in app/_components/HubClient.tsx",
-        "Tab renders <AgentsView /> component (app/_components/AgentsView.tsx, may be a stub for this story)",
-        "Tab shows a numeric badge with the count of jobs in queued or running status; badge is hidden when count is 0",
-        "Badge count is derived from job data fetched by AgentsView and passed up to the parent or managed via shared state",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-402",
-      "title": "Agent job list",
-      "description": "As the owner, I need to see all pipeline jobs with their current status so I know what is running, done, or failed.",
-      "acceptanceCriteria": [
-        "AgentsView fetches GET /api/jobs on mount",
-        "When any job has status='running', the view re-fetches every 5 seconds; stops polling when no running jobs",
-        "Jobs displayed in three sections: Active (status queued or running), Done (status succeeded or cancelled), Failed (status failed)",
-        "Each job card shows: pipeline display name (e.g. 'Sync Plaud recordings'), title, status pill with appropriate color (blue=running, grey=queued, green=succeeded, red=failed, grey=cancelled), created_at formatted as relative time (e.g. '3 min ago'), progress bar visible and animated when status=running, error_message truncated to 200 chars shown when status=failed",
-        "Empty state when no jobs exist: 'No agent jobs yet. Trigger a pipeline below.'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-403",
-      "title": "Pipeline trigger panel",
-      "description": "As the owner, I need a trigger panel to start any Mitchell pipeline from the Hub with an optional file path.",
-      "acceptanceCriteria": [
-        "Below the job list, a section titled 'Run a pipeline' renders one row per pipeline type",
-        "Rows: PLAUD ('Sync Plaud recordings', no path input), PROMPT ('Ingest document or URL', path optional placeholder 'File path or URL'), EMAIL ('Process inbox emails', no path), DEEPEN ('Deepen knowledge', path optional placeholder 'Target note path'), PDF-CLONE ('Clone PDF to Markdown', path required placeholder 'PDF file path'), SAP-NOTE ('Ingest SAP note', path optional placeholder 'Note file or URL'), RFP-RESPONSE ('Process RFP requirements', path required placeholder 'Requirements file path'), REPORT ('Push briefing report', no path)",
-        "Each row has a Run button that calls POST /api/jobs with correct job_type, auto-generated title (e.g. 'PLAUD sync — 12 Aug 2026'), and input.path if entered",
-        "PDF-CLONE and RFP-RESPONSE Run buttons are disabled until the path input is non-empty",
-        "Run button is disabled for 2 seconds after click to prevent double-submit",
-        "On successful POST, the new job immediately appears at the top of the Active section without a full page reload",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-404",
-      "title": "Bridge status indicator",
-      "description": "As the owner, I need a Bridge status chip so I know whether my Mac is connected and jobs will execute.",
-      "acceptanceCriteria": [
-        "Top of AgentsView shows a status chip before the job list",
-        "'Bridge online' with a green dot displayed if last_bridge_seen from GET /api/jobs is within the last 90 seconds",
-        "'Bridge offline — jobs will wait' with a grey dot displayed otherwise",
-        "Status chip updates on each poll cycle (every 5s when jobs are running, or on each manual re-fetch)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-405",
-      "title": "Cancel job from UI",
-      "description": "As the owner, I need to cancel a queued job from the UI so I can abort work before the Bridge picks it up.",
-      "acceptanceCriteria": [
-        "Jobs in Active section with status='queued' show a small 'Cancel' button",
-        "Jobs with status='running' do not show the Cancel button",
-        "Pressing Cancel calls POST /api/jobs/:id/cancel",
-        "On 200 response: job card status immediately updates to 'Cancelled' in the UI without a full re-fetch",
-        "On 409 response: shows an inline toast or alert message 'Job is already running — it will complete normally'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-501",
-      "title": "Authorization integration tests",
-      "description": "As a developer, I need automated tests covering authorization on every route so a future change cannot silently remove access controls.",
-      "acceptanceCriteria": [
-        "tests/auth.test.mjs exists and is compatible with the existing test runner",
-        "Tests GET /api/briefings, GET /api/sources, PATCH /api/cards/[id], POST /api/briefings/:slug/complete each with: missing JWT header (expect 401), malformed JWT (expect 401), expired JWT (expect 401), valid JWT for wrong email (expect 401)",
-        "Tests POST /api/ingest with: missing bearer token (expect 401), wrong bearer token (expect 401), valid bearer token with valid payload (expect 200)",
-        "Tests that a valid agent bearer token presented to GET /api/briefings returns 401",
-        "Tests run with npm test and all pass",
-        "Typecheck passes"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-502",
-      "title": "End-to-end smoke test for job lifecycle",
-      "description": "As a developer, I need an E2E test for the full poll-claim-progress-complete cycle so regressions in the Bridge API are caught automatically.",
-      "acceptanceCriteria": [
-        "bridge/pipelines/stub.js exports run(job, config) that sleeps 200ms then resolves successfully (for test use only)",
-        "POST /api/jobs accepts job_type='stub' only when NODE_ENV=test (returns 400 in production)",
-        "tests/e2e-pipeline.test.mjs starts the Hub server in test mode (DEV_SKIP_AUTH=true, NODE_ENV=test)",
-        "Test creates a stub job via POST /api/jobs and receives a job id",
-        "Test starts a Bridge child process with stub mode config pointing at the test Hub",
-        "Test polls GET /api/jobs until the job reaches status='succeeded' or times out after 10 seconds",
-        "Test asserts that progress_pct was updated at least once before succeeded",
-        "npm test runs both auth.test.mjs and e2e-pipeline.test.mjs and all pass",
-        "Typecheck passes"
-      ],
-      "priority": 25,
       "passes": true,
       "notes": ""
     }

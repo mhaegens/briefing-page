@@ -97,6 +97,15 @@ export function getDb() {
   if (!cardColumns.some((column) => column.name === "content")) {
     sqlite.exec("ALTER TABLE cards ADD COLUMN content TEXT");
   }
+  if (!cardColumns.some((column) => column.name === "action_job_type")) {
+    sqlite.exec("ALTER TABLE cards ADD COLUMN action_job_type TEXT");
+  }
+  if (!cardColumns.some((column) => column.name === "action_job_title")) {
+    sqlite.exec("ALTER TABLE cards ADD COLUMN action_job_title TEXT");
+  }
+  if (!cardColumns.some((column) => column.name === "action_job_input")) {
+    sqlite.exec("ALTER TABLE cards ADD COLUMN action_job_input TEXT");
+  }
 
   _sqlite = sqlite;
   _db = drizzle(sqlite, { schema });

@@ -57,6 +57,7 @@ export async function GET(
       reference: c.reference,
       status: c.status,
       action_choice: c.action_choice,
+      action_job_type: c.action_job_type,
     }));
 
     return NextResponse.json({

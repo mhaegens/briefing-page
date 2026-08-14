@@ -4,7 +4,7 @@ import { jobs } from "@/db/schema";
 import { desc, max } from "drizzle-orm";
 import { requireOwner } from "@/src/lib/auth";
 
-const VALID_JOB_TYPES = ["plaud", "prompt", "email", "deepen", "pdf-clone", "sap-note", "rfp-response", "report"] as const;
+const VALID_JOB_TYPES = ["plaud", "prompt", "email", "deepen", "pdf-clone", "sap-note", "rfp-response", "report", "email-fetch", "email-commit"] as const;
 const TEST_ONLY_JOB_TYPES = ["stub"] as const;
 
 export async function GET(request: NextRequest) {

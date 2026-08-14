@@ -7,6 +7,8 @@ import { run as runSapNote } from "./pipelines/sap-note.js";
 import { run as runRfpResponse } from "./pipelines/rfp-response.js";
 import { run as runReport } from "./pipelines/report.js";
 import { run as runStub } from "./pipelines/stub.js";
+import { run as runEmailFetch } from "./pipelines/email-fetch.js";
+import { run as runEmailCommit } from "./pipelines/email-commit.js";
 
 const PIPELINES = {
   plaud: runPlaud,
@@ -17,6 +19,8 @@ const PIPELINES = {
   "sap-note": runSapNote,
   "rfp-response": runRfpResponse,
   report: runReport,
+  "email-fetch": runEmailFetch,
+  "email-commit": runEmailCommit,
 };
 
 // Stub pipeline available only in test mode
